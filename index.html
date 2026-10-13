@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#4A90E2">
 <title>Minecraft Bounce</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,16 +21,38 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Mobile: disable pinch-zoom, double-tap zoom, pull-to-refresh,
+       callout (text selection), highlight (tap flash on iOS) */
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
   }
   #stage {
     position: relative;
-    width: 900px; height: 620px;
+    width: 900px;
+    /* No fixed height — let aspect-ratio + max-* handle it. */
+    aspect-ratio: 900 / 620;
+    max-width: 100vw;
+    max-height: 100vh;
     background: #4A90E2;
     box-shadow: 0 0 0 6px #1a1a1a, 0 0 60px rgba(0,0,0,0.6);
     image-rendering: pixelated;
     overflow: hidden;
   }
-  canvas { display: block; image-rendering: pixelated; }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    /* Scale the 900x620 internal canvas to fill the stage.
+       The stage is sized via width + aspect-ratio, so when the
+       viewport shrinks the stage shrinks, and so does the canvas. */
+    width: 100%;
+    height: 100%;
+    /* Don't let the browser steal our taps for scroll/zoom.
+       We handle jump on touchstart ourselves. */
+    touch-action: none;
+  }
   /* DOM button layer (overlays canvas) */
   #ui {
     position: absolute; inset: 0;
@@ -48,6 +74,10 @@
     letter-spacing: 1px;
     transition: transform 0.05s, box-shadow 0.05s, background 0.15s;
     text-transform: uppercase;
+    /* Mobile: kill the 300ms tap delay on buttons.
+       manipulation = disable double-tap zoom, allow panning.
+       (Parent already has touch-action: none so this is belt+suspenders.) */
+    touch-action: manipulation;
   }
   .btn:hover:not(.disabled) { background: #5A9AD7; }
   .btn:active:not(.disabled) {
@@ -202,6 +232,76 @@
   .btnGear:active {
     transform: translateY(4px) !important;
     box-shadow: 0 2px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.2) !important;
+  }
+
+  /* -------- MOBILE / small screens --------
+     On desktop the stage is 900x620 with a black box-shadow border.
+     On mobile, the stage scales to fit the viewport while preserving
+     the 900:620 aspect ratio. Letterbox bars (top/bottom in portrait,
+     left/right in landscape) are the page's #0a0a0a background,
+     which is the same color as the desktop box-shadow border so
+     it looks intentional.
+
+     All child elements (canvas, #ui, #btnNuke) inherit the stage's
+     size, so they stay aligned with the visible game area. */
+  @media (max-width: 600px) {
+    #stage {
+      /* Fill the viewport in the smaller dimension, then derive
+         the other dimension from the 900:620 aspect ratio. The
+         min() picks the larger of the two constrained sizes, so
+         the stage is as big as possible while preserving aspect. */
+      width: min(100vw, calc(100vh * 900 / 620));
+      height: min(100vh, calc(100vw * 620 / 900));
+      max-width: 100vw;
+      max-height: 100vh;
+      box-shadow: none;
+    }
+    .btn {
+      font-size: 16px;
+      padding: 12px 20px;
+      margin: 8px 0;
+      border: 4px solid #1a1a1a;
+      box-shadow: 0 6px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.2);
+    }
+    .btn:active:not(.disabled) {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.2);
+    }
+    .btnGear {
+      font-size: 12px !important;
+      padding: 8px 12px !important;
+      border: 3px solid #1a1a1a !important;
+    }
+    #btnNuke {
+      font-size: 20px !important;
+      padding: 16px 24px !important;
+      border: 4px solid #1a1a1a !important;
+      box-shadow: 0 6px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.25) !important;
+    }
+    #btnNuke:active {
+      transform: translateX(-50%) translateY(4px) !important;
+      box-shadow: 0 2px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.25) !important;
+    }
+    .settingsPanel {
+      padding: 32px 24px;
+      min-width: 0;
+      max-width: 92%;
+    }
+    .settingsTitle { font-size: 24px; margin-bottom: 24px; }
+    .settingsEmpty { font-size: 14px; }
+    /* Death-screen buttons are created via JS (showDeathButtons).
+       They use the .btn class so they get the bigger font automatically. */
+  }
+  /* Landscape mobile: stage still preserves 900:620 aspect ratio,
+     so we get side letterbox bars instead of vertical ones. */
+  @media (max-width: 900px) and (orientation: landscape) {
+    #stage {
+      width: min(100vw, calc(100vh * 900 / 620));
+      height: min(100vh, calc(100vw * 620 / 900));
+      max-width: 100vw;
+      max-height: 100vh;
+      box-shadow: none;
+    }
   }
 </style>
 </head>
@@ -2318,6 +2418,25 @@
       }
     }
   });
+
+  // -------- TOUCH JUMP (mobile) --------
+  // On desktop, the Space/Up/W keys trigger the jump (see keydown below).
+  // On mobile, there's no keyboard — so a tap on the canvas does the same
+  // thing. We use 'touchstart' (not 'click') so the jump fires instantly
+  // without the 300ms tap delay, and we still let 'click' handle the
+  // character-card / easter-egg-M hit tests above.
+  canvas.addEventListener('touchstart', (e) => {
+    if (state === 'game') {
+      e.preventDefault();  // prevent the synthesized click from also firing
+      if (onGround) {
+        player.vy = JUMP_V;
+        onGround = false;
+      } else if (!doubleJumped) {
+        player.vy = DBL_JUMP_V;
+        doubleJumped = true;
+      }
+    }
+  }, { passive: false });
 
   // Nuke button: only visible during gameplay when the easter egg is on
   function updateNukeButton() {
