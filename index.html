@@ -1,0 +1,2511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Minecraft Bounce</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #0a0a0a;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    color: #111;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #stage {
+    position: relative;
+    width: 900px; height: 620px;
+    background: #4A90E2;
+    box-shadow: 0 0 0 6px #1a1a1a, 0 0 60px rgba(0,0,0,0.6);
+    image-rendering: pixelated;
+    overflow: hidden;
+  }
+  canvas { display: block; image-rendering: pixelated; }
+  /* DOM button layer (overlays canvas) */
+  #ui {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .btn {
+    pointer-events: auto;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 18px;
+    padding: 16px 28px;
+    margin: 10px 0;
+    background: #4A8AC7;
+    color: #fff;
+    border: 4px solid #1a1a1a;
+    box-shadow: 0 6px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.2);
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: transform 0.05s, box-shadow 0.05s, background 0.15s;
+    text-transform: uppercase;
+  }
+  .btn:hover:not(.disabled) { background: #5A9AD7; }
+  .btn:active:not(.disabled) {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.2);
+  }
+  .btn.disabled {
+    background: #888;
+    color: #ccc;
+    cursor: not-allowed;
+    box-shadow: 0 4px 0 #555, inset 0 -3px 0 rgba(0,0,0,0.2);
+  }
+  .hidden { display: none !important; }
+  /* Nuke button: top-center of canvas, danger red */
+  #btnNuke {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    pointer-events: auto;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    padding: 10px 18px;
+    background: #C73E1D;
+    color: #FFE066;
+    border: 3px solid #1a1a1a;
+    box-shadow: 0 4px 0 #1a1a1a, inset 0 -3px 0 rgba(0,0,0,0.25);
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    animation: nuke-pulse 1s ease-in-out infinite;
+  }
+  #btnNuke:hover { background: #E54E2D; }
+  #btnNuke:active {
+    transform: translateX(-50%) translateY(3px);
+    box-shadow: 0 1px 0 #1a1a1a, inset 0 -3px 0 rgba(0,0,0,0.25);
+  }
+  @keyframes nuke-pulse {
+    0%, 100% { box-shadow: 0 4px 0 #1a1a1a, 0 0 0 rgba(255,80,0,0); }
+    50% { box-shadow: 0 4px 0 #1a1a1a, 0 0 12px rgba(255,80,0,0.8); }
+  }
+  /* Settings menu — overlay shown on top of the title screen */
+  #settingsMenu {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .settingsPanel {
+    background: #2A2A2A;
+    border: 4px solid #1a1a1a;
+    box-shadow: 0 8px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.3);
+    padding: 30px 40px;
+    min-width: 400px;
+    max-width: 600px;
+    text-align: center;
+  }
+  .settingsTitle {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 22px;
+    color: #fff;
+    margin: 0 0 24px 0;
+    letter-spacing: 2px;
+  }
+  .settingsBody {
+    min-height: 100px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .settingsEmpty {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    color: #888;
+    margin: 0;
+  }
+  /* Setting row — label on the left, control on the right */
+  .settingsRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 360px;
+    margin: 12px 0;
+    padding: 6px 4px;
+    gap: 16px;
+  }
+  .settingsLabel {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    color: #fff;
+    text-align: left;
+    line-height: 1.4;
+    flex: 1;
+  }
+  /* Minecraft-style ON/OFF toggle (matches button style) */
+  .toggle {
+    font-family: 'Press Start 2P', monospace !important;
+    font-size: 12px !important;
+    padding: 8px 16px !important;
+    min-width: 64px;
+    border: 3px solid #1a1a1a !important;
+    box-shadow: 0 4px 0 #1a1a1a !important;
+    cursor: pointer !important;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: transform 0.05s, box-shadow 0.05s, background 0.15s;
+  }
+  .toggle.on {
+    background: #4A8AC7 !important;  /* blue when ON */
+    color: #fff !important;
+  }
+  .toggle.off {
+    background: #666 !important;  /* gray when OFF */
+    color: #ccc !important;
+  }
+  .toggle:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #1a1a1a !important;
+  }
+  /* Settings button on the title screen — same blue as other buttons,
+     same font (Press Start 2P). Positioned absolutely in the top-right
+     corner of the game stage so it doesn't take up space in the
+     centered button column. */
+  .btnGear {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 15;
+    font-family: 'Press Start 2P', monospace !important;
+    font-size: 14px !important;
+    padding: 10px 16px !important;
+    margin: 0 !important;
+    background: #4A8AC7 !important;
+    color: #fff !important;
+    border: 4px solid #1a1a1a !important;
+    box-shadow: 0 6px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.2) !important;
+    cursor: pointer !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+    pointer-events: auto !important;
+    transition: transform 0.05s, box-shadow 0.05s, background 0.15s !important;
+  }
+  .btnGear:hover { background: #5A9AD7 !important; }
+  .btnGear:active {
+    transform: translateY(4px) !important;
+    box-shadow: 0 2px 0 #1a1a1a, inset 0 -4px 0 rgba(0,0,0,0.2) !important;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c" width="900" height="620"></canvas>
+  <div id="ui">
+    <button id="btnChar" class="btn">Character Selector</button>
+    <button id="btnPlay" class="btn disabled">Play</button>
+    <!-- Settings gear button. In the static HTML so it's visible on
+         the initial title screen (before the user has done anything).
+         updateSettingsButton() in the script controls its visibility
+         based on the current state. -->
+    <button id="btnSettings" class="btnGear">⚙ Settings</button>
+  </div>
+  <button id="btnNuke" class="hidden">☢ NUKE</button>
+  <!-- Settings menu overlay (initially hidden). Populated by JS when the
+       user opens it. The exit button is the only interactive control
+       for now; the user will add the real settings later. -->
+  <div id="settingsMenu" class="hidden">
+    <div class="settingsPanel">
+      <h2 class="settingsTitle">SETTINGS</h2>
+      <div class="settingsBody" id="settingsBody">
+        <p class="settingsEmpty">No settings yet</p>
+      </div>
+      <button id="btnSettingsExit" class="btn">Exit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const W = 900, H = 620;
+  const GROUND_Y = 480;
+  const GRAVITY = 0.5;
+  const JUMP_V = -12;
+  const DBL_JUMP_V = -10;
+  const PLAYER_W = 32, PLAYER_H = 64;
+
+  // -------- STATE --------
+  let state = 'title'; // 'title' | 'select' | 'game' | 'death'
+  let selectedChar = null; // 'steve' | 'alex'
+  let score = 0;
+  let speedMult = 1.0;
+  let obstacles = [];
+  let clouds = [];
+  let particles = [];
+  let nextSpawnX = W;
+  let spawnDelay = 90; // 1.5 seconds before first obstacle
+  let groundOffset = 0;
+  let deathT = 0;          // 0..1 progress of death animation
+  let deathDuration = 90;  // frames (~1.5s at 60fps)
+  // -------- EASTER EGG STATE --------
+  // Toggled by clicking the "M" in the "MINECRAFT" logo on the title screen.
+  // When active, the player auto-equips tools to defeat obstacles instead
+  // of dying: sword vs mobs, axe vs trees, flint & steel vs creepers.
+  let easterEgg = false;
+  // Animation/effect state for the easter egg
+  let playerItem = null;       // 'sword' | 'axe' | 'flint_steel' | null
+  let playerItemTimer = 0;     // frames the item is shown
+  let swingT = 0;              // 0..1 progress of a tool swing
+  let swinging = false;        // true while a swing animation is playing
+  let mobDeaths = [];          // {x, y, rot, type, t} for dying mobs
+  let fallingTrees = [];       // {x, y, type, rot, t, dropping} falling trees
+  let woodDrops = [];          // {x, y, vx, vy, life, age} wood pickups
+  let explosions = [];         // creeper explosions {x, y, t, r}
+  let woodCollected = 0;       // total wood blocks the player has picked up
+  // UNO REVERSE easter egg (skeleton-on-skeleton warfare)
+  // When a skeleton is near (but not in striking range) the player pulls
+  // out an UNO reverse card. The skeleton turns around, shoots itself
+  // rapidly for ~3 seconds, then dies. The world is paused during this.
+  let unoReverseActive = false;
+  let unoReverseT = 0;          // frames since the reverse card was shown
+  let unoReverseTarget = null;  // the skeleton being attacked
+  const UNO_REVERSE_DURATION = 180;  // 3 seconds at 60fps
+  const UNO_SHOOT_INTERVAL = 5;      // shoot every N frames
+  const UNO_TRIGGER_RANGE_MIN = 80;   // closer than this = strike
+  const UNO_TRIGGER_RANGE_MAX = 180;  // farther than this = not yet
+  // NUKE easter egg (kill-everything button at the top of the screen)
+  // When clicked, a nuke falls from the top, freezes the world, blows up
+  // every obstacle/mob/tree, and spawns a huge particle burst that
+  // fades away over 4 seconds (240 frames).
+  let nukeActive = false;
+  let nukeT = 0;                 // frames since nuke was triggered
+  let nukeFalling = true;        // true while nuke is falling
+  const NUKE_FALL_DURATION = 30; // ~0.5s for the nuke to fall
+  // After the boom, the post-boom sequence is:
+  //  1. Big explosion (instant)
+  //  2. Orange screen for 1 second (60 frames)
+  //  3. Particles fall through the floor and fade out, while the title
+  //     screen is visible underneath. This takes 6 seconds (360 frames).
+  //  4. State resets to 'title' so the player can play again.
+  const NUKE_ORANGE_DURATION = 60;   // 1 second of orange screen
+  const NUKE_FADE_DURATION = 360;    // 6 seconds for particles to fall through floor
+  const NUKE_POST_TOTAL = NUKE_ORANGE_DURATION + NUKE_FADE_DURATION; // 420 = 7s
+  let nukePostT = 0;
+  const nukeParticles = [];      // explosion particles with per-particle fade
+  let gameRunning = false;
+  let lastTime = 0;
+  let spacePressed = false;
+  let spaceWasPressed = false;
+  let onGround = true;
+  let doubleJumped = false;
+
+  const player = {
+    x: 120,
+    y: GROUND_Y - PLAYER_H,
+    vy: 0,
+    w: PLAYER_W, h: PLAYER_H,
+    rotation: 0
+  };
+
+  // -------- STRUCTURE BUILD (every 50 score points) --------
+  // BLOCK is the pixel size of a single Minecraft block in this game.
+  // Sized so 5-6 block wide structures fit comfortably on screen.
+  const BLOCK = 14;
+  // Building state. When buildingStructure !== null, the world is frozen
+  // and the player navigates the structure to build it block-by-block,
+  // then walks through it.
+  let buildingStructure = null;        // current structure index
+  let buildBlockIndex = 0;             // which block we're placing
+  let buildPlacedBlocks = [];          // blocks already placed (copies)
+  let buildPhase = 'idle';             // 'walk_to_base' | 'build' | 'walk_to_entry' | 'enter' | 'walk_through' | 'walk_to_exit' | 'exit' | 'done'
+  let buildT = 0;                      // frames in current phase
+  let buildTargetX = 0, buildTargetY = 0; // where the player is heading
+  let buildEntryDoorOpen = 0;          // 0-1 (0=closed, 1=open)
+  let buildExitDoorOpen = 0;           // 0-1
+  // Where the structure is anchored (left edge x, baseline y)
+  let buildOriginX = 0, buildOriginY = 0;
+  // The list of structures, ordered by score threshold.
+  // Each structure defines:
+  //   threshold  — score at which it builds
+  //   name       — display label
+  //   width      — pixel width of bounding box
+  //   height     — pixel height of bounding box
+  //   blocks     — list of {x, y, color, w, h, type} (x, y in block units)
+  //                where (0,0) is the bottom-left of the structure.
+  //                y values increase UPWARD (we flip when drawing).
+  //   entryDoor  — {x, y, w, h} position of entry door (in block units)
+  //   exitDoor   — {x, y, w, h} position of exit door
+  // The player builds blocks bottom-up, left-to-right.
+  const STRUCTURES = [
+    // 50 — small oak house
+    {
+      threshold: 50, name: 'Small Oak House', width: 6, height: 6,
+      blocks: [
+        // floor
+        {x:0,y:0,c:'#8B6F3F'},{x:1,y:0,c:'#8B6F3F'},{x:2,y:0,c:'#8B6F3F'},{x:3,y:0,c:'#8B6F3F'},{x:4,y:0,c:'#8B6F3F'},{x:5,y:0,c:'#8B6F3F'},
+        // walls (oak plank with darker stripes for visual interest)
+        {x:0,y:1,c:'#A57E55'},{x:1,y:1,c:'#8B6F3F'},{x:2,y:1,c:'#A57E55'},{x:3,y:1,c:'#8B6F3F'},{x:4,y:1,c:'#A57E55'},{x:5,y:1,c:'#8B6F3F'},
+        {x:0,y:2,c:'#8B6F3F'},{x:1,y:2,c:'#A57E55'},{x:2,y:2,c:'#8B6F3F'},{x:3,y:2,c:'#A57E55'},{x:4,y:2,c:'#8B6F3F'},{x:5,y:2,c:'#A57E55'},
+        {x:0,y:3,c:'#A57E55'},{x:1,y:3,c:'#8B6F3F'},{x:2,y:3,c:'#A57E55'},{x:3,y:3,c:'#8B6F3F'},{x:4,y:3,c:'#A57E55'},{x:5,y:3,c:'#8B6F3F'},
+        {x:0,y:4,c:'#8B6F3F'},{x:1,y:4,c:'#A57E55'},{x:2,y:4,c:'#8B6F3F'},{x:3,y:4,c:'#A57E55'},{x:4,y:4,c:'#8B6F3F'},{x:5,y:4,c:'#A57E55'},
+        // roof
+        {x:0,y:5,c:'#5C3A1E'},{x:1,y:5,c:'#7C5A2E'},{x:2,y:5,c:'#5C3A1E'},{x:3,y:5,c:'#7C5A2E'},{x:4,y:5,c:'#5C3A1E'},{x:5,y:5,c:'#7C5A2E'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:6, y:2, w:1, h:2, side:'right'}
+    },
+    // 100 — cobblestone tower
+    {
+      threshold: 100, name: 'Cobblestone Tower', width: 5, height: 7,
+      blocks: [
+        // base (full row)
+        {x:0,y:0,c:'#6E6E6E'},{x:1,y:0,c:'#7E7E7E'},{x:2,y:0,c:'#6E6E6E'},{x:3,y:0,c:'#7E7E7E'},{x:4,y:0,c:'#6E6E6E'},
+        // middle solid layer
+        {x:0,y:1,c:'#5E5E5E'},{x:1,y:1,c:'#7E7E7E'},{x:2,y:1,c:'#6E6E6E'},{x:3,y:1,c:'#5E5E5E'},{x:4,y:1,c:'#7E7E7E'},
+        // walls
+        {x:0,y:2,c:'#6E6E6E'},{x:4,y:2,c:'#5E5E5E'},
+        {x:0,y:3,c:'#7E7E7E'},{x:4,y:3,c:'#6E6E6E'},
+        {x:0,y:4,c:'#5E5E5E'},{x:4,y:4,c:'#7E7E7E'},
+        {x:0,y:5,c:'#6E6E6E'},{x:4,y:5,c:'#5E5E5E'},
+        // top — crenellations
+        {x:0,y:6,c:'#5E5E5E'},{x:2,y:6,c:'#7E7E7E'},{x:4,y:6,c:'#6E6E6E'},
+      ],
+      entryDoor: {x:-1, y:2, w:1, h:2, side:'left'},
+      exitDoor: {x:5, y:4, w:1, h:2, side:'right'}
+    },
+    // 150 — village church (steeple)
+    {
+      threshold: 150, name: 'Village Church', width: 5, height: 8,
+      blocks: [
+        // floor
+        {x:0,y:0,c:'#C8B89A'},{x:1,y:0,c:'#A89878'},{x:2,y:0,c:'#C8B89A'},{x:3,y:0,c:'#A89878'},{x:4,y:0,c:'#C8B89A'},
+        // walls (white)
+        {x:0,y:1,c:'#E8DCC0'},{x:1,y:1,c:'#D8CCB0'},{x:2,y:1,c:'#E8DCC0'},{x:3,y:1,c:'#D8CCB0'},{x:4,y:1,c:'#E8DCC0'},
+        {x:0,y:2,c:'#D8CCB0'},{x:1,y:2,c:'#E8DCC0'},{x:2,y:2,c:'#D8CCB0'},{x:3,y:2,c:'#E8DCC0'},{x:4,y:2,c:'#D8CCB0'},
+        {x:0,y:3,c:'#E8DCC0'},{x:1,y:3,c:'#D8CCB0'},{x:2,y:3,c:'#E8DCC0'},{x:3,y:3,c:'#D8CCB0'},{x:4,y:3,c:'#E8DCC0'},
+        {x:0,y:4,c:'#D8CCB0'},{x:1,y:4,c:'#E8DCC0'},{x:2,y:4,c:'#D8CCB0'},{x:3,y:4,c:'#E8DCC0'},{x:4,y:4,c:'#D8CCB0'},
+        // roof (red)
+        {x:0,y:5,c:'#A83838'},{x:1,y:5,c:'#C84848'},{x:2,y:5,c:'#A83838'},{x:3,y:5,c:'#C84848'},{x:4,y:5,c:'#A83838'},
+        // steeple
+        {x:1,y:6,c:'#E8DCC0'},{x:2,y:6,c:'#E8DCC0'},{x:3,y:6,c:'#E8DCC0'},
+        {x:1,y:7,c:'#E8DCC0'},{x:2,y:7,c:'#D8CCB0'},{x:3,y:7,c:'#E8DCC0'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:5, y:3, w:1, h:2, side:'right'}
+    },
+    // 200 — viking longhouse (wood)
+    {
+      threshold: 200, name: 'Viking Longhouse', width: 7, height: 5,
+      blocks: [
+        // floor
+        {x:0,y:0,c:'#8B6F3F'},{x:1,y:0,c:'#6E5025'},{x:2,y:0,c:'#8B6F3F'},{x:3,y:0,c:'#6E5025'},{x:4,y:0,c:'#8B6F3F'},{x:5,y:0,c:'#6E5025'},{x:6,y:0,c:'#8B6F3F'},
+        // walls (oak plank, with windows)
+        {x:0,y:1,c:'#A57E55'},{x:1,y:1,c:'#5C3A1E'},{x:2,y:1,c:'#A57E55'},{x:3,y:1,c:'#5C3A1E'},{x:4,y:1,c:'#A57E55'},{x:5,y:1,c:'#5C3A1E'},{x:6,y:1,c:'#A57E55'},
+        {x:0,y:2,c:'#8B6F3F'},{x:1,y:2,c:'#A57E55'},{x:2,y:2,c:'#8B6F3F'},{x:3,y:2,c:'#A57E55'},{x:4,y:2,c:'#8B6F3F'},{x:5,y:2,c:'#A57E55'},{x:6,y:2,c:'#8B6F3F'},
+        {x:0,y:3,c:'#A57E55'},{x:1,y:3,c:'#5C3A1E'},{x:2,y:3,c:'#A57E55'},{x:3,y:3,c:'#5C3A1E'},{x:4,y:3,c:'#A57E55'},{x:5,y:3,c:'#5C3A1E'},{x:6,y:3,c:'#A57E55'},
+        // roof (wooden shingles)
+        {x:0,y:4,c:'#6E4A1E'},{x:1,y:4,c:'#5C3A1E'},{x:2,y:4,c:'#6E4A1E'},{x:3,y:4,c:'#5C3A1E'},{x:4,y:4,c:'#6E4A1E'},{x:5,y:4,c:'#5C3A1E'},{x:6,y:4,c:'#6E4A1E'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:7, y:1, w:1, h:2, side:'right'}
+    },
+    // 250 — igloo (snow dome)
+    {
+      threshold: 250, name: 'Igloo', width: 5, height: 4,
+      blocks: [
+        // floor (snow)
+        {x:0,y:0,c:'#E8F0F8'},{x:1,y:0,c:'#F0F8FF'},{x:2,y:0,c:'#E8F0F8'},{x:3,y:0,c:'#F0F8FF'},{x:4,y:0,c:'#E8F0F8'},
+        // walls (snow, with ice windows)
+        {x:0,y:1,c:'#E8F0F8'},{x:1,y:1,c:'#7AB8E8'},{x:2,y:1,c:'#E8F0F8'},{x:3,y:1,c:'#7AB8E8'},{x:4,y:1,c:'#E8F0F8'},
+        {x:0,y:2,c:'#D8E0E8'},{x:1,y:2,c:'#E8F0F8'},{x:2,y:2,c:'#D8E0E8'},{x:3,y:2,c:'#E8F0F8'},{x:4,y:2,c:'#D8E0E8'},
+        // dome top
+        {x:1,y:3,c:'#F0F8FF'},{x:2,y:3,c:'#F0F8FF'},{x:3,y:3,c:'#F0F8FF'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:5, y:1, w:1, h:2, side:'right'}
+    },
+    // 300 — jungle temple (mossy cobble)
+    {
+      threshold: 300, name: 'Jungle Temple', width: 5, height: 5,
+      blocks: [
+        // floor (mossy stone)
+        {x:0,y:0,c:'#5A6E3A'},{x:1,y:0,c:'#6E7E4A'},{x:2,y:0,c:'#5A6E3A'},{x:3,y:0,c:'#6E7E4A'},{x:4,y:0,c:'#5A6E3A'},
+        // walls (mossy cobblestone)
+        {x:0,y:1,c:'#7A8A5A'},{x:1,y:1,c:'#6A7A4A'},{x:2,y:1,c:'#7A8A5A'},{x:3,y:1,c:'#6A7A4A'},{x:4,y:1,c:'#7A8A5A'},
+        {x:0,y:2,c:'#6A7A4A'},{x:1,y:2,c:'#7A8A5A'},{x:2,y:2,c:'#6A7A4A'},{x:3,y:2,c:'#7A8A5A'},{x:4,y:2,c:'#6A7A4A'},
+        {x:0,y:3,c:'#7A8A5A'},{x:1,y:3,c:'#6A7A4A'},{x:2,y:3,c:'#7A8A5A'},{x:3,y:3,c:'#6A7A4A'},{x:4,y:3,c:'#7A8A5A'},
+        // roof (mossy slabs)
+        {x:0,y:4,c:'#5A6E3A'},{x:1,y:4,c:'#4A5E2A'},{x:2,y:4,c:'#5A6E3A'},{x:3,y:4,c:'#4A5E2A'},{x:4,y:4,c:'#5A6E3A'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:5, y:2, w:1, h:2, side:'right'}
+    },
+    // 350 — desert pyramid (sandstone)
+    {
+      threshold: 350, name: 'Desert Pyramid', width: 5, height: 5,
+      blocks: [
+        // base
+        {x:0,y:0,c:'#E8D89A'},{x:1,y:0,c:'#D8C88A'},{x:2,y:0,c:'#E8D89A'},{x:3,y:0,c:'#D8C88A'},{x:4,y:0,c:'#E8D89A'},
+        // walls
+        {x:0,y:1,c:'#D8C88A'},{x:1,y:1,c:'#E8D89A'},{x:2,y:1,c:'#D8C88A'},{x:3,y:1,c:'#E8D89A'},{x:4,y:1,c:'#D8C88A'},
+        {x:0,y:2,c:'#E8D89A'},{x:1,y:2,c:'#D8C88A'},{x:2,y:2,c:'#E8D89A'},{x:3,y:2,c:'#D8C88A'},{x:4,y:2,c:'#E8D89A'},
+        // pyramid steps
+        {x:1,y:3,c:'#D8C88A'},{x:2,y:3,c:'#E8D89A'},{x:3,y:3,c:'#D8C88A'},
+        {x:2,y:4,c:'#C8B87A'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:5, y:1, w:1, h:2, side:'right'}
+    },
+    // 400 — witch hut (oak + mushroom)
+    {
+      threshold: 400, name: 'Witch Hut', width: 3, height: 4,
+      blocks: [
+        // floor
+        {x:0,y:0,c:'#5D8C3A'},{x:1,y:0,c:'#3D6B2A'},{x:2,y:0,c:'#5D8C3A'},
+        // walls (oak)
+        {x:0,y:1,c:'#A57E55'},{x:1,y:1,c:'#8B6F3F'},{x:2,y:1,c:'#A57E55'},
+        {x:0,y:2,c:'#8B6F3F'},{x:1,y:2,c:'#A57E55'},{x:2,y:2,c:'#8B6F3F'},
+        // mushroom roof (red+white spots)
+        {x:0,y:3,c:'#A83838'},{x:1,y:3,c:'#F0E8E0'},{x:2,y:3,c:'#A83838'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:3, y:1, w:1, h:2, side:'right'}
+    },
+    // 450 — stronghold portal room (scaled)
+    {
+      threshold: 450, name: 'Stronghold Portal Room', width: 6, height: 4,
+      blocks: [
+        // floor (stone brick)
+        {x:0,y:0,c:'#7E7E6E'},{x:1,y:0,c:'#6E6E5E'},{x:2,y:0,c:'#7E7E6E'},{x:3,y:0,c:'#6E6E5E'},{x:4,y:0,c:'#7E7E6E'},{x:5,y:0,c:'#6E6E5E'},
+        // walls (stone brick)
+        {x:0,y:1,c:'#8E8E7E'},{x:1,y:1,c:'#6E6E5E'},{x:2,y:1,c:'#3A2A8A'},{x:3,y:1,c:'#3A2A8A'},{x:4,y:1,c:'#6E6E5E'},{x:5,y:1,c:'#8E8E7E'},
+        {x:0,y:2,c:'#7E7E6E'},{x:1,y:2,c:'#6E6E5E'},{x:2,y:2,c:'#5A4AAA'},{x:3,y:2,c:'#5A4AAA'},{x:4,y:2,c:'#6E6E5E'},{x:5,y:2,c:'#7E7E6E'},
+        // top with portal frames (dark)
+        {x:0,y:3,c:'#8E8E7E'},{x:1,y:3,c:'#1A3A2A'},{x:2,y:3,c:'#2A5A4A'},{x:3,y:3,c:'#2A5A4A'},{x:4,y:3,c:'#1A3A2A'},{x:5,y:3,c:'#8E8E7E'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:6, y:1, w:1, h:2, side:'right'}
+    },
+    // 500 — ancient city portal frame (scaled)
+    {
+      threshold: 500, name: 'Ancient City Portal Frame', width: 5, height: 6,
+      blocks: [
+        // floor (reinforced deepslate)
+        {x:0,y:0,c:'#3A3A4A'},{x:1,y:0,c:'#4A4A5A'},{x:2,y:0,c:'#3A3A4A'},{x:3,y:0,c:'#4A4A5A'},{x:4,y:0,c:'#3A3A4A'},
+        // walls (reinforced deepslate)
+        {x:0,y:1,c:'#4A4A5A'},{x:1,y:1,c:'#3A3A4A'},{x:2,y:1,c:'#3AAA8A'},{x:3,y:1,c:'#3A3A4A'},{x:4,y:1,c:'#4A4A5A'},
+        {x:0,y:2,c:'#3A3A4A'},{x:1,y:2,c:'#4A4A5A'},{x:2,y:2,c:'#3AAA8A'},{x:3,y:2,c:'#4A4A5A'},{x:4,y:2,c:'#3A3A4A'},
+        {x:0,y:3,c:'#4A4A5A'},{x:1,y:3,c:'#3A3A4A'},{x:2,y:3,c:'#3AAA8A'},{x:3,y:3,c:'#3A3A4A'},{x:4,y:3,c:'#4A4A5A'},
+        {x:0,y:4,c:'#3A3A4A'},{x:1,y:4,c:'#4A4A5A'},{x:2,y:4,c:'#3AAA8A'},{x:3,y:4,c:'#4A4A5A'},{x:4,y:4,c:'#3A3A4A'},
+        // big portal frame top
+        {x:0,y:5,c:'#1A1A2A'},{x:1,y:5,c:'#1A1A2A'},{x:2,y:5,c:'#2A8A6A'},{x:3,y:5,c:'#1A1A2A'},{x:4,y:5,c:'#1A1A2A'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:5, y:3, w:1, h:2, side:'right'}
+    },
+    // 550 — ocean monument (scaled — just 2 prisms)
+    {
+      threshold: 550, name: 'Ocean Monument', width: 5, height: 6,
+      blocks: [
+        // floor (prismarine)
+        {x:0,y:0,c:'#3A8A7A'},{x:1,y:0,c:'#4A9A8A'},{x:2,y:0,c:'#3A8A7A'},{x:3,y:0,c:'#4A9A8A'},{x:4,y:0,c:'#3A8A7A'},
+        // walls
+        {x:0,y:1,c:'#2A6A5A'},{x:1,y:1,c:'#3A8A7A'},{x:2,y:1,c:'#4A9A8A'},{x:3,y:1,c:'#3A8A7A'},{x:4,y:1,c:'#4A9A8A'},
+        {x:0,y:2,c:'#3A8A7A'},{x:1,y:2,c:'#4A9A8A'},{x:2,y:2,c:'#2A6A5A'},{x:3,y:2,c:'#4A9A8A'},{x:4,y:2,c:'#2A6A5A'},
+        {x:0,y:3,c:'#4A9A8A'},{x:1,y:3,c:'#2A6A5A'},{x:2,y:3,c:'#3A8A7A'},{x:3,y:3,c:'#2A6A5A'},{x:4,y:3,c:'#3A8A7A'},
+        {x:0,y:4,c:'#2A6A5A'},{x:1,y:4,c:'#3A8A7A'},{x:2,y:4,c:'#4A9A8A'},{x:3,y:4,c:'#3A8A7A'},{x:4,y:4,c:'#4A9A8A'},
+        // top — guardians (gold + dark)
+        {x:0,y:5,c:'#3A8A7A'},{x:1,y:5,c:'#D8B85A'},{x:2,y:5,c:'#1A2A2A'},{x:3,y:5,c:'#D8B85A'},{x:4,y:5,c:'#3A8A7A'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:5, y:2, w:1, h:2, side:'right'}
+    },
+    // 600 — nether fortress (nether brick)
+    {
+      threshold: 600, name: 'Nether Fortress', width: 6, height: 5,
+      blocks: [
+        // floor (nether brick)
+        {x:0,y:0,c:'#3A1A1A'},{x:1,y:0,c:'#4A2A2A'},{x:2,y:0,c:'#3A1A1A'},{x:3,y:0,c:'#4A2A2A'},{x:4,y:0,c:'#3A1A1A'},{x:5,y:0,c:'#4A2A2A'},
+        // walls
+        {x:0,y:1,c:'#4A2A2A'},{x:1,y:1,c:'#3A1A1A'},{x:2,y:1,c:'#4A2A2A'},{x:3,y:1,c:'#3A1A1A'},{x:4,y:1,c:'#4A2A2A'},{x:5,y:1,c:'#3A1A1A'},
+        {x:0,y:2,c:'#3A1A1A'},{x:1,y:2,c:'#4A2A2A'},{x:2,y:2,c:'#3A1A1A'},{x:3,y:2,c:'#4A2A2A'},{x:4,y:2,c:'#3A1A1A'},{x:5,y:2,c:'#4A2A2A'},
+        {x:0,y:3,c:'#4A2A2A'},{x:1,y:3,c:'#3A1A1A'},{x:2,y:3,c:'#4A2A2A'},{x:3,y:3,c:'#3A1A1A'},{x:4,y:3,c:'#4A2A2A'},{x:5,y:3,c:'#3A1A1A'},
+        // roof with blaze spawner (orange) in center
+        {x:0,y:4,c:'#3A1A1A'},{x:1,y:4,c:'#4A2A2A'},{x:2,y:4,c:'#FF8C2A'},{x:3,y:4,c:'#FF8C2A'},{x:4,y:4,c:'#4A2A2A'},{x:5,y:4,c:'#3A1A1A'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:6, y:2, w:1, h:2, side:'right'}
+    },
+    // 650 — end city (purpur)
+    {
+      threshold: 650, name: 'End City', width: 5, height: 6,
+      blocks: [
+        // floor (purpur)
+        {x:0,y:0,c:'#8A6A8A'},{x:1,y:0,c:'#9A7A9A'},{x:2,y:0,c:'#8A6A8A'},{x:3,y:0,c:'#9A7A9A'},{x:4,y:0,c:'#8A6A8A'},
+        // walls
+        {x:0,y:1,c:'#9A7A9A'},{x:1,y:1,c:'#8A6A8A'},{x:2,y:1,c:'#9A7A9A'},{x:3,y:1,c:'#8A6A8A'},{x:4,y:1,c:'#9A7A9A'},
+        {x:0,y:2,c:'#8A6A8A'},{x:1,y:2,c:'#9A7A9A'},{x:2,y:2,c:'#8A6A8A'},{x:3,y:2,c:'#9A7A9A'},{x:4,y:2,c:'#8A6A8A'},
+        {x:0,y:3,c:'#9A7A9A'},{x:1,y:3,c:'#8A6A8A'},{x:2,y:3,c:'#9A7A9A'},{x:3,y:3,c:'#8A6A8A'},{x:4,y:3,c:'#9A7A9A'},
+        {x:0,y:4,c:'#8A6A8A'},{x:1,y:4,c:'#9A7A9A'},{x:2,y:4,c:'#8A6A8A'},{x:3,y:4,c:'#9A7A9A'},{x:4,y:4,c:'#8A6A8A'},
+        // shulker on top (purple-white)
+        {x:0,y:5,c:'#9A7A9A'},{x:1,y:5,c:'#9A7AAA'},{x:2,y:5,c:'#E8D8E8'},{x:3,y:5,c:'#9A7AAA'},{x:4,y:5,c:'#9A7A9A'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:5, y:2, w:1, h:2, side:'right'}
+    },
+    // 700 — woodland mansion wing (dark oak, scaled)
+    {
+      threshold: 700, name: 'Woodland Mansion', width: 5, height: 5,
+      blocks: [
+        // floor (dark oak)
+        {x:0,y:0,c:'#4A3A2A'},{x:1,y:0,c:'#3A2A1A'},{x:2,y:0,c:'#4A3A2A'},{x:3,y:0,c:'#3A2A1A'},{x:4,y:0,c:'#4A3A2A'},
+        // walls (dark oak)
+        {x:0,y:1,c:'#5A4A3A'},{x:1,y:1,c:'#3A2A1A'},{x:2,y:1,c:'#5A4A3A'},{x:3,y:1,c:'#3A2A1A'},{x:4,y:1,c:'#5A4A3A'},
+        {x:0,y:2,c:'#4A3A2A'},{x:1,y:2,c:'#5A4A3A'},{x:2,y:2,c:'#4A3A2A'},{x:3,y:2,c:'#5A4A3A'},{x:4,y:2,c:'#4A3A2A'},
+        {x:0,y:3,c:'#3A2A1A'},{x:1,y:3,c:'#4A3A2A'},{x:2,y:3,c:'#3A2A1A'},{x:3,y:3,c:'#4A3A2A'},{x:4,y:3,c:'#3A2A1A'},
+        // roof (dark oak slabs)
+        {x:0,y:4,c:'#4A3A2A'},{x:1,y:4,c:'#3A2A1A'},{x:2,y:4,c:'#4A3A2A'},{x:3,y:4,c:'#3A2A1A'},{x:4,y:4,c:'#4A3A2A'},
+      ],
+      entryDoor: {x:-1, y:1, w:1, h:2, side:'left'},
+      exitDoor: {x:5, y:2, w:1, h:2, side:'right'}
+    },
+  ];
+  // Track which structures have been built this game (by index). The
+  // user wants every 50 score points to trigger a random unbuilt
+  // structure so they can see different builds each game.
+  let builtStructures = new Set();
+  let nextBuildScore = 50;  // the next score threshold that triggers a build
+
+  // -------- COLORS --------
+  const COL = {
+    sky1: '#7AB8E8', sky2: '#4A90E2',
+    grassTop: '#5D8C3A', grassDirt: '#8B6F3F', grassDark: '#3D6B2A',
+    oakTrunk: '#6E4A2E', oakLeaf: '#3D8B2C', oakLeafDk: '#2D6B1C',
+    birchTrunk: '#DCDCC0', birchMark: '#888', birchLeaf: '#5DAB3D', birchLeafDk: '#3D8B2C',
+    steveSkin: '#C28E5C', steveSkinDk: '#9A6E40',
+    steveHair: '#3A2418', steveShirt: '#4A8AC7', stevePants: '#2E4F8B',
+    alexSkin: '#C28E5C', alexSkinDk: '#9A6E40',
+    alexHair: '#C25A1C', alexShirt: '#6EBA56', alexPants: '#6E4A2E',
+    zombieSkin: '#5BA85B', zombieCloth: '#2E4F8B',
+    skelBone: '#DCDCC0', skelBoneDk: '#888',
+    creeper: '#5DAB3D', creeperDk: '#3D8B2C', creeperFoot: '#2D6B1C',
+    cloud: 'rgba(255,255,255,0.85)',
+    overlay: 'rgba(255,255,255,0.55)',
+    deathOverlay: 'rgba(0,0,0,0.55)',
+    red: '#D04040',
+    yellow: '#F0C040'
+  };
+
+  // -------- DRAWING PRIMITIVES --------
+  function fillRect(x, y, w, h, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  }
+  function px(x, y, c) { fillRect(x, y, 1, 1, c); }
+
+  // -------- BACKGROUND SCENE (for title/death overlays) --------
+  function drawSky() {
+    const grad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+    grad.addColorStop(0, COL.sky1);
+    grad.addColorStop(1, COL.sky2);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, GROUND_Y);
+  }
+  function drawClouds() {
+    for (const c of clouds) {
+      fillRect(c.x, c.y, 60, 14, COL.cloud);
+      fillRect(c.x + 8, c.y - 6, 30, 8, COL.cloud);
+      fillRect(c.x + 30, c.y - 4, 40, 10, COL.cloud);
+    }
+  }
+  function drawHills() {
+    // Far hills
+    fillRect(0, GROUND_Y - 30, W, 30, '#5D8C3A');
+    fillRect(0, GROUND_Y - 30, W, 4, '#3D6B2A');
+    // Distant trees on hills (decorative)
+    drawDecoTree(80, GROUND_Y - 50, 0.7);
+    drawDecoTree(280, GROUND_Y - 45, 0.65);
+    drawDecoTree(540, GROUND_Y - 50, 0.7);
+    drawDecoTree(760, GROUND_Y - 45, 0.65);
+  }
+  function drawDecoTree(x, baseY, scale) {
+    // Trunk
+    fillRect(x - 4 * scale, baseY, 8 * scale, 20 * scale, COL.oakTrunk);
+    // Leaves
+    const lx = x - 20 * scale, ly = baseY - 30 * scale;
+    fillRect(lx, ly, 40 * scale, 30 * scale, COL.oakLeaf);
+    fillRect(lx + 4 * scale, ly - 6 * scale, 32 * scale, 8 * scale, COL.oakLeaf);
+    fillRect(lx, ly + 26 * scale, 40 * scale, 6 * scale, COL.oakLeafDk);
+  }
+  function drawGround() {
+    // Grass top
+    fillRect(0, GROUND_Y, W, 8, COL.grassTop);
+    fillRect(0, GROUND_Y, W, 2, COL.grassDark);
+    // Dirt below
+    fillRect(0, GROUND_Y + 8, W, H - GROUND_Y - 8, COL.grassDirt);
+    // Grass blades poking up
+    for (let x = ((groundOffset % 16) - 16); x < W; x += 16) {
+      fillRect(x, GROUND_Y - 2, 2, 3, COL.grassTop);
+      fillRect(x + 8, GROUND_Y - 1, 2, 2, COL.grassDark);
+    }
+  }
+  function drawTitleScene() {
+    drawSky();
+    drawClouds();
+    drawHills();
+    drawGround();
+  }
+
+  // -------- CHARACTER SPRITES (pixel art, 8x12 grid scaled) --------
+  // We'll draw at native pixel scale then scale up. Define a function for each character.
+  // Pixel grid: 8 wide x 12 tall. Each "pixel" = 4 canvas pixels. So sprite is 32x48, but we
+  // make them 32x64 with head/legs balanced. Easier: use a 8x16 grid and scale 4x = 32x64.
+
+  // I'll draw directly with fillRect at 4px-per-pixel to match PLAYER_W x PLAYER_H (32x64).
+  function drawSteve(px, py) {
+    // 8x16 grid → scale 4 → 32x64
+    const S = 4;
+    // Head (rows 0-3, cols 2-5)
+    // Skin
+    fillRect(px + 8,  py,    16, 16, COL.steveSkin);
+    // Eyes (white + black)
+    fillRect(px + 12, py + 6,  2, 2, '#fff');
+    fillRect(px + 18, py + 6,  2, 2, '#fff');
+    fillRect(px + 12, py + 6,  1, 1, '#000');
+    fillRect(px + 18, py + 6,  1, 1, '#000');
+    // Mouth
+    fillRect(px + 14, py + 12, 4, 1, COL.steveSkinDk);
+    // Hair (top)
+    fillRect(px + 8,  py,    16, 4, COL.steveHair);
+    fillRect(px + 6,  py,     2, 8, COL.steveHair);
+    fillRect(px + 24, py,     2, 8, COL.steveHair);
+    // Body (shirt) rows 4-9
+    fillRect(px + 8,  py + 16, 16, 20, COL.steveShirt);
+    // Arms
+    fillRect(px + 4,  py + 16, 4, 20, COL.steveShirt);
+    fillRect(px + 24, py + 16, 4, 20, COL.steveShirt);
+    // Hands
+    fillRect(px + 4,  py + 32, 4, 4, COL.steveSkin);
+    fillRect(px + 24, py + 32, 4, 4, COL.steveSkin);
+    // Pants rows 10-13
+    fillRect(px + 8,  py + 36, 16, 16, COL.stevePants);
+    // Leg split
+    fillRect(px + 14, py + 36, 4, 16, COL.grassDirt); // mid-line "split"
+    // Feet (shoes)
+    fillRect(px + 6,  py + 52, 8, 8, '#1a1a1a');
+    fillRect(px + 18, py + 52, 8, 8, '#1a1a1a');
+    // Outline accents
+    fillRect(px + 8,  py + 16, 16, 1, COL.steveShirt === '#4A8AC7' ? '#3A7AB7' : '#3A7AB7');
+    fillRect(px + 8,  py + 36, 16, 1, '#1E3F7B');
+  }
+  function drawAlex(px, py) {
+    const S = 4;
+    // Hair (longer, ponytail-ish) — covers top
+    fillRect(px + 6,  py,    20, 6, COL.alexHair);
+    fillRect(px + 4,  py + 2, 2, 14, COL.alexHair); // left side
+    fillRect(px + 26, py + 2, 2, 14, COL.alexHair); // right side
+    // Head (skin)
+    fillRect(px + 8,  py + 4, 16, 12, COL.alexSkin);
+    // Eyes
+    fillRect(px + 12, py + 9,  2, 2, '#fff');
+    fillRect(px + 18, py + 9,  2, 2, '#fff');
+    fillRect(px + 12, py + 9,  1, 1, '#3A2418');
+    fillRect(px + 18, py + 9,  1, 1, '#3A2418');
+    // Mouth
+    fillRect(px + 14, py + 13, 4, 1, COL.alexSkinDk);
+    // Body (shirt) green
+    fillRect(px + 8,  py + 16, 16, 20, COL.alexShirt);
+    // Arms
+    fillRect(px + 4,  py + 16, 4, 20, COL.alexShirt);
+    fillRect(px + 24, py + 16, 4, 20, COL.alexShirt);
+    // Hands
+    fillRect(px + 4,  py + 32, 4, 4, COL.alexSkin);
+    fillRect(px + 24, py + 32, 4, 4, COL.alexSkin);
+    // Pants (brown) rows 10-13
+    fillRect(px + 8,  py + 36, 16, 16, COL.alexPants);
+    // Skirt/frill detail
+    fillRect(px + 6,  py + 36, 2, 4, COL.alexPants);
+    fillRect(px + 24, py + 36, 2, 4, COL.alexPants);
+    // Feet
+    fillRect(px + 6,  py + 52, 8, 8, '#5A3A1E');
+    fillRect(px + 18, py + 52, 8, 8, '#5A3A1E');
+  }
+
+  function drawPlayer() {
+    ctx.save();
+    ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
+    ctx.rotate(player.rotation);
+    if (selectedChar === 'steve') drawSteve(-player.w / 2, -player.h / 2);
+    else drawAlex(-player.w / 2, -player.h / 2);
+    ctx.restore();
+    // Easter-egg tool: drawn AFTER the player so it appears in front
+    if (easterEgg && playerItem && state === 'game') {
+      ctx.save();
+      ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
+      // Swing animation: rotate the arm
+      const swingAngle = swinging ? Math.sin(swingT * Math.PI) * 1.2 : 0;
+      ctx.rotate(swingAngle);
+      // Tool is held in front of the player (to the right), offset so the
+      // larger tools stay in front of the body, not behind it
+      const toolX = 8;
+      const toolY = -22;
+      if (playerItem === 'sword') {
+        drawSword(toolX, toolY);
+      } else if (playerItem === 'axe') {
+        drawAxe(toolX, toolY);
+      } else if (playerItem === 'flint_steel') {
+        drawFlintSteel(toolX, toolY);
+      } else if (playerItem === 'uno_reverse') {
+        // Wobble the card a little for emphasis
+        const wobble = Math.sin(unoReverseT * 0.3) * 2;
+        drawUnoReverse(toolX + wobble, toolY);
+      }
+      ctx.restore();
+    }
+  }
+
+  // Easter-egg tools (drawn in the player's hand)
+  function drawSword(ox, oy) {
+    // Diamond sword: cyan blade + brown handle (drawn larger for visibility)
+    // Blade (diamond shape: top tip, wide middle, taper to hilt)
+    fillRect(ox + 14, oy - 6, 4, 30, '#5DECF5');
+    fillRect(ox + 10, oy - 2, 12, 22, '#5DECF5');
+    fillRect(ox + 18, oy - 10, 4, 38, '#5DECF5');
+    // Blade edge highlight
+    fillRect(ox + 12, oy, 2, 18, '#A0F8F8');
+    // Hilt guard
+    fillRect(ox + 10, oy + 22, 14, 4, '#8B6F3F');
+    // Handle
+    fillRect(ox + 14, oy + 26, 4, 10, '#6E4A2E');
+    // Pommel
+    fillRect(ox + 10, oy + 34, 12, 4, '#FFC700');
+  }
+  function drawAxe(ox, oy) {
+    // Iron axe: gray head + brown handle (drawn larger for visibility)
+    // Handle (taller)
+    fillRect(ox + 13, oy - 4, 4, 38, '#6E4A2E');
+    fillRect(ox + 14, oy - 4, 1, 38, '#8B6F3F');  // highlight
+    // Head (wider, on left side)
+    fillRect(ox, oy - 4, 14, 18, '#A8A8A8');
+    fillRect(ox + 4, oy - 8, 10, 4, '#A8A8A8');
+    fillRect(ox + 4, oy + 14, 8, 4, '#888888');
+    // Edge highlight
+    fillRect(ox, oy - 4, 2, 18, '#D0D0D0');
+  }
+  function drawFlintSteel(ox, oy) {
+    // Flint and steel: gray flint + gold steel (drawn larger for visibility)
+    // Flint (gray stone, jagged)
+    fillRect(ox, oy, 16, 12, '#888888');
+    fillRect(ox + 2, oy - 4, 10, 4, '#888888');
+    fillRect(ox + 4, oy - 8, 8, 4, '#666666');
+    fillRect(ox + 8, oy - 12, 4, 4, '#666666');
+    // Steel (gold-ish) sticking down-right
+    fillRect(ox + 10, oy + 8, 12, 14, '#D4A53A');
+    fillRect(ox + 14, oy + 22, 4, 6, '#D4A53A');
+    // Steel highlight
+    fillRect(ox + 10, oy + 8, 2, 14, '#FFE066');
+    // Tiny spark
+    fillRect(ox + 18, oy - 4, 4, 4, '#FFE066');
+    fillRect(ox + 20, oy - 6, 2, 2, '#FFFFFF');
+  }
+  function drawUnoReverse(ox, oy) {
+    // UNO REVERSE card: yellow card with a red reverse arrow
+    // Card body (yellow with red border)
+    fillRect(ox - 4, oy - 4, 32, 40, '#CC0000');  // red border
+    fillRect(ox - 2, oy - 2, 28, 36, '#FFD700');  // yellow inside
+    // Oval inside the card (the UNO logo)
+    fillRect(ox + 4, oy + 6, 16, 20, '#FFFFFF');
+    fillRect(ox + 6, oy + 8, 12, 16, '#FF0000');
+    // Reverse arrows (left and right pointing at each other in red)
+    fillRect(ox + 8, oy + 12, 8, 4, '#FFFFFF');
+    fillRect(ox + 6, oy + 10, 4, 8, '#FFFFFF');
+    fillRect(ox + 14, oy + 10, 4, 8, '#FFFFFF');
+    fillRect(ox + 8, oy + 18, 8, 4, '#FFFFFF');
+    // "UNO" text-style dashes (the white oval looks like the logo)
+    fillRect(ox + 10, oy + 14, 4, 4, '#FFD700');
+  }
+
+  // -------- OBSTACLES --------
+  function drawOakTree(x, y) {
+    // y is top of canopy
+    // Trunk
+    fillRect(x + 18, y + 50, 12, 60, COL.oakTrunk);
+    fillRect(x + 18, y + 50, 4, 60, COL.oakLeafDk); // shading
+    // Canopy
+    fillRect(x,      y,      48, 50, COL.oakLeaf);
+    fillRect(x + 6,  y - 8,  36, 10, COL.oakLeaf);
+    fillRect(x - 4, y + 4,  6,  46, COL.oakLeaf);
+    fillRect(x + 46, y + 4,  6,  46, COL.oakLeaf);
+    // Leaf shading
+    fillRect(x,      y + 44, 48, 6, COL.oakLeafDk);
+    fillRect(x,      y,      48, 4, '#4D9B3C');
+  }
+  function drawBirchTree(x, y) {
+    fillRect(x + 18, y + 50, 12, 60, COL.birchTrunk);
+    // Birch bark marks
+    fillRect(x + 22, y + 60, 2, 2, COL.birchMark);
+    fillRect(x + 20, y + 75, 4, 2, COL.birchMark);
+    fillRect(x + 24, y + 90, 2, 2, COL.birchMark);
+    fillRect(x + 22, y + 100, 3, 2, COL.birchMark);
+    // Canopy
+    fillRect(x,      y,      48, 50, COL.birchLeaf);
+    fillRect(x + 6,  y - 8,  36, 10, COL.birchLeaf);
+    fillRect(x - 4, y + 4,  6,  46, COL.birchLeaf);
+    fillRect(x + 46, y + 4,  6,  46, COL.birchLeaf);
+    fillRect(x,      y + 44, 48, 6, COL.birchLeafDk);
+    fillRect(x,      y,      48, 4, '#6DBB4D');
+  }
+  function drawZombie(x, y) {
+    // Blocky humanoid
+    // Head (green)
+    fillRect(x + 6, y,      20, 20, COL.zombieSkin);
+    // Eyes
+    fillRect(x + 10, y + 6,  3, 3, '#fff');
+    fillRect(x + 18, y + 6,  3, 3, '#fff');
+    fillRect(x + 10, y + 6,  2, 2, '#000');
+    fillRect(x + 18, y + 6,  2, 2, '#000');
+    // Mouth
+    fillRect(x + 12, y + 14, 8, 1, '#000');
+    // Body (shirt torn)
+    fillRect(x + 6, y + 20, 20, 24, COL.zombieCloth);
+    fillRect(x + 8, y + 24, 16, 4, '#1E3F7B');
+    // Arms
+    fillRect(x,     y + 20, 6, 24, COL.zombieSkin);
+    fillRect(x + 26, y + 20, 6, 24, COL.zombieSkin);
+    // Legs
+    fillRect(x + 6,  y + 44, 8, 18, COL.zombieCloth);
+    fillRect(x + 18, y + 44, 8, 18, COL.zombieCloth);
+    // Feet
+    fillRect(x + 4,  y + 60, 10, 4, COL.zombieCloth);
+    fillRect(x + 18, y + 60, 10, 4, COL.zombieCloth);
+  }
+  function drawSkeleton(x, y) {
+    // Skull
+    fillRect(x + 6, y,      20, 20, COL.skelBone);
+    fillRect(x + 10, y + 6,  3, 4, '#000');
+    fillRect(x + 18, y + 6,  3, 4, '#000');
+    fillRect(x + 12, y + 14, 8, 1, '#000');
+    // Body (ribcage)
+    fillRect(x + 6, y + 20, 20, 24, COL.skelBone);
+    fillRect(x + 10, y + 22, 12, 1, COL.skelBoneDk);
+    fillRect(x + 10, y + 28, 12, 1, COL.skelBoneDk);
+    fillRect(x + 10, y + 34, 12, 1, COL.skelBoneDk);
+    // Arms
+    fillRect(x,     y + 20, 6, 24, COL.skelBone);
+    fillRect(x + 26, y + 20, 6, 24, COL.skelBone);
+    // Legs
+    fillRect(x + 6,  y + 44, 8, 18, COL.skelBone);
+    fillRect(x + 18, y + 44, 8, 18, COL.skelBone);
+    fillRect(x + 4,  y + 60, 10, 4, COL.skelBoneDk);
+    fillRect(x + 18, y + 60, 10, 4, COL.skelBoneDk);
+  }
+  function drawCreeper(x, y) {
+    // Head + body fused (tall green block)
+    fillRect(x + 4, y,      24, 32, COL.creeper);
+    // Eyes
+    fillRect(x + 8,  y + 8,  4, 4, '#000');
+    fillRect(x + 20, y + 8,  4, 4, '#000');
+    // Mouth
+    fillRect(x + 12, y + 18, 8, 1, '#000');
+    fillRect(x + 8,  y + 22, 16, 4, '#000');
+    fillRect(x + 12, y + 22, 8, 4, COL.creeperDk);
+    // Body
+    fillRect(x + 4, y + 32, 24, 24, COL.creeper);
+    // Legs
+    fillRect(x + 4,  y + 56, 10, 8, COL.creeperFoot);
+    fillRect(x + 18, y + 56, 10, 8, COL.creeperFoot);
+    // Shading
+    fillRect(x + 4, y + 0, 4, 32, COL.creeperDk);
+    fillRect(x + 4, y + 32, 4, 24, COL.creeperDk);
+  }
+
+  // -------- NO-BLOOD DEATH PUFF --------
+  // The no-blood version of the game shows a small gray "poof" of
+  // particles when the character dies, instead of a big blood explosion.
+  function spawnDeathPuff(x, y) {
+    for (let i = 0; i < 30; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1 + Math.random() * 2;
+      particles.push({
+        x: x + (Math.random() - 0.5) * 8,
+        y: y + (Math.random() - 0.5) * 8,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 1,
+        life: 50 + Math.floor(Math.random() * 20),
+        age: 0,
+        col: '#888888',  // gray smoke
+        size: 3
+      });
+    }
+  }
+
+  // -------- OBSTACLE TYPE FACTORY --------
+  function spawnObstacle() {
+    const r = Math.random();
+    let type;
+    if (r < 0.5) type = Math.random() < 0.5 ? 'oak' : 'birch';
+    else type = Math.random() < 0.33 ? 'zombie' : Math.random() < 0.5 ? 'skeleton' : 'creeper';
+    let w, h, y;
+    if (type === 'oak' || type === 'birch') {
+      w = 48; h = 110;
+      y = GROUND_Y - h;  // root at ground
+    } else {
+      w = 32; h = 64;
+      y = GROUND_Y - h;
+    }
+    obstacles.push({ type, x: W + 50, y, w, h, scored: false });
+  }
+
+  // -------- GAME LOOP --------
+  function resetGame() {
+    obstacles = [];
+    particles = [];
+    score = 0;
+    speedMult = 1.0;
+    nextSpawnX = W + 200;
+    spawnDelay = 90;
+    groundOffset = 0;
+    player.x = 120;
+    player.y = GROUND_Y - PLAYER_H;
+    player.vy = 0;
+    player.rotation = 0;
+    onGround = true;
+    doubleJumped = false;
+    deathT = 0;
+    // Reset easter-egg state (the toggle itself persists across games)
+    playerItem = null;
+    playerItemTimer = 0;
+    swingT = 0;
+    swinging = false;
+    mobDeaths = [];
+    fallingTrees = [];
+    woodDrops = [];
+    explosions = [];
+    woodCollected = 0;
+    unoReverseActive = false;
+    unoReverseT = 0;
+    unoReverseTarget = null;
+    nukeActive = false;
+    nukeT = 0;
+    nukeFalling = true;
+    nukePostT = 0;
+    nukeParticles.length = 0;
+    // Reset structure build state so a new game starts fresh at score 0
+    buildingStructure = null;
+    builtStructures.clear();
+    nextBuildScore = 50;
+    buildBlockIndex = 0;
+    buildPlacedBlocks = [];
+    buildPhase = 'idle';
+    buildT = 0;
+    buildEntryDoorOpen = 0;
+    buildExitDoorOpen = 0;
+  }
+  function initClouds() {
+    clouds = [];
+    for (let i = 0; i < 5; i++) {
+      clouds.push({ x: Math.random() * W, y: 40 + Math.random() * 100, vx: 0.2 + Math.random() * 0.3 });
+    }
+  }
+  initClouds();
+
+  function update(dt) {
+    if (state === 'game') {
+      // STRUCTURE BUILD: when score crosses a 50-point threshold, trigger
+      // the build. The build takes over the player and freezes the world.
+      // Each build picks a random unbuilt structure so the player sees
+      // different ones each game.
+      if (!buildingStructure) {
+        const pending = pendingStructure();
+        if (pending) {
+          triggerBuild(pending.structure);
+          builtStructures.add(pending.index);
+          nextBuildScore += 50;
+        }
+      }
+      // While a build is in progress, only run build updates — skip the
+      // normal gameplay (no obstacle movement, no scoring, no death).
+      if (buildingStructure) {
+        updateBuild();
+        return;
+      }
+      // UNO REVERSE: detect a skeleton in the trigger range and freeze the world
+      if (easterEgg && !unoReverseActive) {
+        for (const o of obstacles) {
+          if (o._easterEggConsumed) continue;
+          if (o.type !== 'skeleton') continue;
+          const d = o.x - (player.x + player.w);
+          if (d >= UNO_TRIGGER_RANGE_MIN && d <= UNO_TRIGGER_RANGE_MAX) {
+            unoReverseActive = true;
+            unoReverseT = 0;
+            unoReverseTarget = o;
+            o._unoFlipped = true;  // mark for the skeleton draw function
+            break;
+          }
+        }
+      }
+      // NUKE update: when the nuke is active, advance its phase timer and
+      // trigger the explosion at the end of the fall.
+      if (nukeActive) {
+        nukeT++;
+        // After the fall, advance the post-boom timer too
+        if (nukeT > NUKE_FALL_DURATION) nukePostT++;
+        if (nukeFalling && nukeT === NUKE_FALL_DURATION) {
+          // BOOM! Detonate: kill every obstacle, spawn a HUGE particle
+          // burst, then begin the fade-out.
+          nukeFalling = false;
+          nukePostT = 0;  // reset post-boom timer to start the orange phase fresh
+          // Mark every obstacle as nuked (gives score too)
+          for (const o of obstacles) {
+            if (o._easterEggConsumed) continue;
+            // Big death: every mob/creeper/tree gets the death animation
+            if (o.type === 'oak' || o.type === 'birch') {
+              fallingTrees.push({
+                x: o.x, y: o.y, w: o.w, h: o.h, type: o.type, t: 0
+              });
+            } else {
+              mobDeaths.push({
+                x: o.x, y: o.y, w: o.w, h: o.h, type: o.type, t: 0
+              });
+              // Nuke-killed mobs: white particles, same style as
+              // character death
+              const cx = o.x + o.w/2;
+              const cy = o.y + 10;
+              for (let i = 0; i < 10; i++) {
+                particles.push({
+                  x: cx,
+                  y: cy,
+                  vx: (Math.random() - 0.5) * 1.2,
+                  vy: -1 - Math.random() * 1.5,
+                  life: 60,
+                  age: 0,
+                  col: '#FFFFFF',
+                  size: 3
+                });
+              }
+            }
+            o._easterEggConsumed = true;
+            if (!o.scored) {
+              score += 2;
+              o.scored = true;
+            }
+          }
+          obstacles = obstacles.filter(o => !o._easterEggConsumed);
+          // Massive explosion particles — ~80 of them, each with its own
+          // staggered fade time so they disappear one by one over 4 sec.
+          const colors = ['#FF0000', '#FF8C00', '#FFD700', '#FF4500', '#FFFF00', '#FFFFFF', '#888888'];
+          for (let i = 0; i < 80; i++) {
+            const angle = (Math.PI * 2 * i) / 80 + Math.random() * 0.3;
+            const speed = 2 + Math.random() * 3;  // less spread so they fall cleanly
+            nukeParticles.push({
+              x: W / 2 + (Math.random() - 0.5) * 60,
+              y: GROUND_Y - 40 + (Math.random() - 0.5) * 40,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed - 1.0,  // small upward bias
+              size: 4 + Math.floor(Math.random() * 5),
+              col: colors[Math.floor(Math.random() * colors.length)],
+              // Per-particle fade: each one disappears at a different time
+              // over the 6-second (360 frame) fall-and-fade window, so they
+              // vanish one by one. fadeStart is 0-320 so each particle's
+              // 30-frame fade ends before the 6-sec window closes.
+              fadeStart: Math.floor(Math.random() * 320),
+              age: 0
+            });
+          }
+          // Clear any other death animations / explosions
+          mobDeaths.length = 0;
+          fallingTrees.length = 0;
+          explosions.length = 0;
+          // Big ground explosion (a single big one)
+          explosions.push({ x: W / 2, y: GROUND_Y - 20, t: 0, r: 30 });
+        }
+        if (nukeT >= NUKE_FALL_DURATION + NUKE_POST_TOTAL) {
+          // Nuke is done — switch to the title screen so the player can play again
+          nukeActive = false;
+          nukeT = 0;
+          nukeFalling = true;
+          nukePostT = 0;
+          nukeParticles.length = 0;
+          state = 'title';
+          // Reset the game world so a fresh round can begin
+          resetGame();
+          // Show the title screen buttons (Character Selector + Play)
+          hideUI();
+          showUI();
+          restoreTitleButtons();
+          updateNukeButton();
+          updateSettingsButton();
+        }
+      }
+      // While the UNO reverse effect OR the nuke is playing, freeze the world
+      const worldFrozen = unoReverseActive || nukeActive;
+      // World scroll (parallax clouds slower)
+      if (!worldFrozen) {
+        for (const c of clouds) {
+          c.x -= c.vx * speedMult;
+          if (c.x < -80) { c.x = W + Math.random() * 200; c.y = 40 + Math.random() * 100; }
+        }
+        groundOffset += 2.5 * speedMult;
+      }
+      // Player physics (jump still works during UNO for fun)
+      player.vy += GRAVITY;
+      player.y += player.vy;
+      if (player.y >= GROUND_Y - PLAYER_H) {
+        player.y = GROUND_Y - PLAYER_H;
+        player.vy = 0;
+        onGround = true;
+        doubleJumped = false;
+      } else {
+        onGround = false;
+      }
+      // Spawn obstacles — only one per frame, and only when current obstacles
+      // have moved far enough left to make room. The first obstacle is
+      // delayed by spawnDelay frames so the player has time to react.
+      // The spawn delay does NOT short-circuit the easter-egg check below,
+      // so the player can still defend themselves even during the lead-in.
+      // Also: don't spawn while the world is frozen (UNO reverse in progress).
+      if (!worldFrozen) {
+        spawnDelay = Math.max(0, spawnDelay - 1);
+        if (spawnDelay > 0) {
+          // Still run easter-egg logic during the lead-in
+        } else {
+          const rightmost = obstacles.length ? Math.max(...obstacles.map(o => o.x)) : 0;
+          const minGap = 450;
+          if (obstacles.length === 0) {
+            spawnObstacle();
+          } else if (rightmost < W + 50 && (W + 200) - rightmost > minGap) {
+            spawnObstacle();
+          }
+          // Move obstacles
+          for (const o of obstacles) o.x -= 2.5 * speedMult;
+          // Remove off-screen
+          obstacles = obstacles.filter(o => {
+            if (o.x + o.w < 0) {
+              if (!o.scored) { score++; o.scored = true; }
+              return false;
+            }
+            return true;
+          });
+        }
+      }
+      // Speed up (capped at 1.4× starting speed for a more relaxed feel)
+      speedMult = Math.min(1.4, 1.0 + score / 250);
+      // Easter-egg proximity detection: when active, decide which tool
+      // the player should be holding based on the closest upcoming obstacle.
+      if (easterEgg) {
+        // UNO REVERSE overrides the normal item display
+        if (unoReverseActive && unoReverseTarget) {
+          playerItem = 'uno_reverse';
+          // Skeleton shoots itself every UNO_SHOOT_INTERVAL frames
+          if (unoReverseT % UNO_SHOOT_INTERVAL === 0) {
+            // Skeleton fires an arrow from its own body outward (in the
+            // direction it's now facing - away from the player)
+            const sx = unoReverseTarget.x + unoReverseTarget.w / 2;
+            const sy = unoReverseTarget.y + unoReverseTarget.h * 0.3;
+            // Sparks: arrow flies RIGHT (away from player, into nothing)
+            // but we spawn a "self-hit" spark on the skeleton at the same time
+            for (let i = 0; i < 3; i++) {
+              particles.push({
+                x: sx + (Math.random() - 0.5) * 8,
+                y: sy + (Math.random() - 0.5) * 8,
+                vx: 1 + Math.random() * 1.5,  // flying away from player
+                vy: (Math.random() - 0.5) * 1.5,
+                life: 25,
+                age: 0,
+                col: '#FFD700',  // gold sparks (self-shot)
+                size: 3
+              });
+            }
+            // Tiny smoke puff on the skeleton's bow side
+            particles.push({
+              x: sx,
+              y: sy,
+              vx: 0.5,
+              vy: -0.5,
+              life: 20,
+              age: 0,
+              col: '#AAAAAA',
+              size: 5
+            });
+            // Recoil shake
+            player._unoShake = (player._unoShake || 0) + 1;
+          }
+          // After the duration, kill the skeleton with a Minecraft death
+          if (unoReverseT >= UNO_REVERSE_DURATION) {
+            const o = unoReverseTarget;
+            mobDeaths.push({
+              x: o.x, y: o.y, w: o.w, h: o.h, type: o.type, t: 0
+            });
+            // White death particles (no-blood version, same style as
+            // character death)
+            const cx = o.x + o.w / 2;
+            const cy = o.y + 10;
+            for (let i = 0; i < 15; i++) {
+              particles.push({
+                x: cx, y: cy,
+                vx: (Math.random() - 0.5) * 1.2,
+                vy: -1 - Math.random() * 1.5,
+                life: 60, age: 0,
+                col: '#FFFFFF',
+                size: 3
+              });
+            }
+            o._easterEggConsumed = true;
+            if (!o.scored) {
+              score += 2;  // bonus for UNO reverse (skeleton is harder)
+              o.scored = true;
+            }
+            // Big "UNO REVERSE!" flash particles (white in the
+            // no-blood version, to match the character death style)
+            for (let i = 0; i < 8; i++) {
+              const angle = (Math.PI * 2 * i) / 8;
+              particles.push({
+                x: cx, y: cy,
+                vx: Math.cos(angle) * 3,
+                vy: Math.sin(angle) * 3,
+                life: 50, age: 0,
+                col: '#FFFFFF',
+                size: 4
+              });
+            }
+            // Reset UNO state
+            unoReverseActive = false;
+            unoReverseT = 0;
+            unoReverseTarget = null;
+            playerItem = null;
+          } else {
+            unoReverseT++;
+          }
+        } else {
+          const strikeRange = 80;     // px from player to trigger a swing
+          const itemShowRange = 180;  // px to start showing the tool
+          let nearest = null;
+          let nearestDist = Infinity;
+          for (const o of obstacles) {
+            if (o.x + o.w < player.x) continue;  // already passed
+            // Don't strike skeletons - they trigger the UNO reverse instead
+            if (o._easterEggConsumed) continue;
+            const d = o.x - (player.x + player.w);
+            if (d < nearestDist) { nearestDist = d; nearest = o; }
+          }
+          if (nearest) {
+            if (nearest.type === 'oak' || nearest.type === 'birch') {
+              playerItem = 'axe';
+            } else if (nearest.type === 'creeper') {
+              playerItem = 'flint_steel';
+            } else if (nearest.type === 'skeleton') {
+              // Skeleton: only show the sword if it's actually in striking range
+              // (otherwise the UNO reverse card will be the item)
+              if (nearestDist < strikeRange) {
+                playerItem = 'sword';
+              } else {
+                playerItem = null;
+              }
+            } else {
+              playerItem = 'sword';
+            }
+            // Trigger a swing when the obstacle is in striking range
+            if (nearestDist < strikeRange && !swinging) {
+              swinging = true;
+              swingT = 0;
+              // Spawn the appropriate effect
+              const o = nearest;
+              if (o.type === 'oak' || o.type === 'birch') {
+                // Tree falls: rotation 0 → 90°
+                fallingTrees.push({
+                  x: o.x, y: o.y, w: o.w, h: o.h, type: o.type, t: 0
+                });
+                // Schedule wood drops after the tree falls (~30 frames)
+              } else if (o.type === 'creeper') {
+                // Creeper explodes
+                explosions.push({
+                  x: o.x + o.w/2, y: o.y + o.h/2, t: 0
+                });
+                // Spawn explosion particles (orange/yellow firework-like)
+                const cx = o.x + o.w/2;
+                const cy = o.y + o.h/2;
+                const colors = ['#FF8C00', '#FFA500', '#FFD700', '#FF4500', '#FFFF00'];
+                for (let i = 0; i < 20; i++) {
+                  const angle = (Math.PI * 2 * i) / 20 + Math.random() * 0.3;
+                  const speed = 2 + Math.random() * 2;
+                  particles.push({
+                    x: cx,
+                    y: cy,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 35,
+                    age: 0,
+                  col: colors[Math.floor(Math.random() * colors.length)],
+                  size: 4
+                });
+              }
+              // Smoke particles (gray, going up)
+              for (let i = 0; i < 8; i++) {
+                particles.push({
+                  x: cx + (Math.random() - 0.5) * 20,
+                  y: cy,
+                  vx: (Math.random() - 0.5) * 1.5,
+                  vy: -1 - Math.random(),
+                  life: 50,
+                  age: 0,
+                  col: '#666666',
+                  size: 6
+                });
+              }
+            } else {
+              // Mob dies (Minecraft death: rotate + white particles,
+              // same as the character death style)
+              mobDeaths.push({
+                x: o.x, y: o.y, w: o.w, h: o.h, type: o.type, t: 0
+              });
+              // Spawn white particles — matching the character death
+              // style: small white particles that float upward.
+              const cx = o.x + o.w/2;
+              const cy = o.y + 10;  // start near the top of the mob
+              for (let i = 0; i < 15; i++) {
+                particles.push({
+                  x: cx,
+                  y: cy,
+                  vx: (Math.random() - 0.5) * 1.2,
+                  vy: -1 - Math.random() * 1.5,
+                  life: 60,
+                  age: 0,
+                  col: '#FFFFFF',
+                  size: 3
+                });
+              }
+            }
+            // Mark the obstacle for removal
+            o._easterEggConsumed = true;
+            // Reward the player for defeating it
+            if (!o.scored) {
+              score++;
+              o.scored = true;
+              // Bonus for creepers and trees
+              if (o.type === 'creeper') score += 2;
+              else if (o.type === 'oak' || o.type === 'birch') score += 1;
+            }
+          }
+        } else {
+          // No nearby obstacles — show the item briefly if it was just used
+          if (playerItemTimer > 0) playerItemTimer--;
+          else playerItem = null;
+        }
+        // Remove consumed obstacles
+        obstacles = obstacles.filter(o => !o._easterEggConsumed);
+      }
+      } else {
+        playerItem = null;
+      }
+      // Swing animation progress
+      if (swinging) {
+        swingT += 0.08;
+        if (swingT >= 1) {
+          swingT = 0;
+          swinging = false;
+        }
+      }
+      // Update falling trees
+      for (const ft of fallingTrees) {
+        ft.t++;
+        ft.rot = (Math.PI / 2) * Math.min(1, ft.t / 30);
+        if (ft.t === 30) {
+          // Spawn wood drops at the trunk
+          const dropX = ft.x + ft.w/2 - 6;
+          const dropY = ft.y + ft.h - 12;
+          woodDrops.push({
+            x: dropX, y: dropY, vx: 0.4, vy: -4, life: 240, age: 0
+          });
+          woodDrops.push({
+            x: dropX - 8, y: dropY - 4, vx: -0.2, vy: -3.5, life: 240, age: 0
+          });
+        }
+      }
+      fallingTrees = fallingTrees.filter(ft => ft.t < 90);
+      // Update wood drops (gravity, then auto-pickup when near player)
+      for (const w of woodDrops) {
+        w.age++;
+        w.vy += 0.18;
+        w.x += w.vx;
+        w.y += w.vy;
+        // Auto-pickup when close to player
+        const pcx = player.x + player.w/2;
+        const pcy = player.y + player.h/2;
+        const dx = pcx - (w.x + 4);
+        const dy = pcy - (w.y + 4);
+        const dist = Math.hypot(dx, dy);
+        if (dist < 30) {
+          w.vx = dx * 0.2;
+          w.vy = dy * 0.2;
+        } else if (w.y > GROUND_Y - 8) {
+          w.y = GROUND_Y - 8;
+          w.vy = 0;
+          w.vx *= 0.8;
+        }
+        // Pickup: when close enough, remove the drop and spawn sparkles
+        if (dist < 8 && !w._picked) {
+          w._picked = true;
+          woodCollected++;
+          // Spawn a small burst of brown/gold sparkle particles
+          for (let i = 0; i < 6; i++) {
+            particles.push({
+              x: w.x + 4,
+              y: w.y + 4,
+              vx: (Math.random() - 0.5) * 2,
+              vy: -1 - Math.random() * 2,
+              life: 30,
+              age: 0,
+              col: i % 2 ? '#C19A6B' : '#FFD700',
+              size: 3
+            });
+          }
+          w.life = 0; // mark for removal on next filter
+        }
+      }
+      woodDrops = woodDrops.filter(w => w.age < w.life);
+      // Update mob deaths
+      for (const m of mobDeaths) {
+        m.t++;
+        m.rot = (Math.PI / 2) * Math.min(1, m.t / 30);
+      }
+      mobDeaths = mobDeaths.filter(m => m.t < 60);
+      // Update explosions
+      for (const e of explosions) {
+        e.t++;
+        e.r = 20 + e.t * 3;
+      }
+      explosions = explosions.filter(e => e.t < 30);
+      // Collision (skip obstacles that have been consumed by the easter egg,
+      // or are currently being UNO-reversed — they cannot hurt the player)
+      const pBox = {
+        x: player.x + 4, y: player.y + 4, w: player.w - 8, h: player.h - 4
+      };
+      for (const o of obstacles) {
+        if (o._easterEggConsumed) continue;
+        if (o._unoFlipped) continue;  // UNO-reversed skeletons can't hurt you
+        const oBox = { x: o.x + 4, y: o.y + 4, w: o.w - 8, h: o.h - 8 };
+        if (pBox.x < oBox.x + oBox.w && pBox.x + pBox.w > oBox.x &&
+            pBox.y < oBox.y + oBox.h && pBox.y + pBox.h > oBox.y) {
+          // Character death (no-blood version: just a small gray puff,
+          // no blood explosion)
+          spawnDeathPuff(player.x + player.w/2, player.y + player.h/2);
+          triggerDeath();
+          break;
+        }
+      }
+    } else if (state === 'death') {
+      // Death animation
+      if (deathT < deathDuration) {
+        deathT++;
+        const t = deathT / deathDuration; // 0..1
+        player.rotation = (Math.PI / 2) * t;
+        // Spawn particles
+        if (deathT % 2 === 0) {
+          particles.push({
+            x: player.x + player.w / 2,
+            y: player.y + 10,
+            vx: (Math.random() - 0.5) * 1.2,
+            vy: -1 - Math.random() * 1.5,
+            life: 60,
+            age: 0,
+            col: '#FFFFFF',
+            size: 3
+          });
+        }
+      }
+    }
+    // Update particles every frame (so easter-egg particles and death
+    // particles animate smoothly regardless of state)
+    for (const p of particles) {
+      p.age++;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy -= 0.02;  // mild "float up" for white death particles
+    }
+    particles = particles.filter(p => p.age < p.life);
+    // Update nuke particles (fall through the floor under gravity,
+    // no air drag — they keep falling until they fade away).
+    for (const p of nukeParticles) {
+      p.age++;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.35;  // strong gravity pulls them down through the floor
+    }
+  }
+
+  // ============================================================
+  // STRUCTURE BUILD (every 50 score points)
+  // ============================================================
+  // Called when score crosses a 50-point threshold. Sets up the
+  // building state and freezes the world. The updateBuild() function
+  // takes over player movement each frame.
+  function triggerBuild(structure) {
+    buildingStructure = structure;
+    buildBlockIndex = 0;
+    buildPlacedBlocks = [];
+    buildPhase = 'walk_to_base';
+    buildT = 0;
+    buildEntryDoorOpen = 0;
+    buildExitDoorOpen = 0;
+    // Position the structure in front of the player.
+    // Player is at x=120. Place structure ~150px to the right of them,
+    // on the ground.
+    buildOriginX = player.x + player.w + 80;
+    buildOriginY = GROUND_Y;  // baseline of structure
+    // Target: stand just to the left of the structure's left edge
+    buildTargetX = buildOriginX - player.w - 6;
+    buildTargetY = GROUND_Y - PLAYER_H;
+    // Reset player to standing position (no jump, on ground)
+    player.vy = 0;
+    player.y = GROUND_Y - PLAYER_H;
+  }
+
+  // Find the next pending structure to build. Returns a random unbuilt
+  // structure if the score has crossed the next 50-point milestone,
+  // otherwise null. Each structure only builds once per game.
+  function pendingStructure() {
+    // Has the player passed the next milestone?
+    if (score < nextBuildScore) return null;
+    // All structures built?
+    if (builtStructures.size >= STRUCTURES.length) return null;
+    // Pick a random unbuilt structure
+    const available = [];
+    for (let i = 0; i < STRUCTURES.length; i++) {
+      if (!builtStructures.has(i)) available.push(i);
+    }
+    if (available.length === 0) return null;
+    const idx = available[Math.floor(Math.random() * available.length)];
+    return { structure: STRUCTURES[idx], index: idx };
+  }
+
+  // Sort blocks so the player builds bottom-up, left-to-right.
+  function sortedBlocks(structure) {
+    return structure.blocks.slice().sort((a, b) => {
+      if (a.y !== b.y) return a.y - b.y;
+      return a.x - b.x;
+    });
+  }
+
+  // Convert block-unit coords to screen coords.
+  // Block (0,0) is the bottom-left of the structure.
+  // We flip y so y=0 is at the bottom of the structure.
+  function blockToScreen(bx, by, structure) {
+    return {
+      x: buildOriginX + bx * BLOCK,
+      y: buildOriginY - (by + 1) * BLOCK  // y increases upward
+    };
+  }
+
+  // Update logic for the build phase. Called every frame when
+  // buildingStructure is set.
+  function updateBuild() {
+    const s = buildingStructure;
+    if (!s) return;
+    buildT++;
+    // Player moves at 2.5 px/frame while building (slow, deliberate)
+    const SPEED = 2.5;
+    // Helper: move the player toward (tx, ty). During build, the player
+    // moves freely in 2D (no gravity) so they can climb the structure.
+    function moveToward(tx, ty) {
+      const dx = tx - player.x;
+      const dy = ty - player.y;
+      // Snap if very close
+      if (Math.abs(dx) <= SPEED && Math.abs(dy) <= SPEED) {
+        player.x = tx;
+        player.y = ty;
+        return;
+      }
+      // Move toward target at SPEED per frame (diagonal moves use full SPEED)
+      if (Math.abs(dx) > Math.abs(dy)) {
+        player.x += Math.sign(dx) * SPEED;
+        if (Math.abs(dy) > 0) player.y += Math.sign(dy) * SPEED;
+      } else {
+        player.y += Math.sign(dy) * SPEED;
+        if (Math.abs(dx) > 0) player.x += Math.sign(dx) * SPEED;
+      }
+    }
+
+    if (buildPhase === 'walk_to_base') {
+      // Walk to a position just left of the structure
+      moveToward(buildTargetX, buildTargetY);
+      if (Math.abs(player.x - buildTargetX) <= 2 && Math.abs(player.y - buildTargetY) <= 2) {
+        buildPhase = 'build';
+        buildT = 0;
+      }
+    } else if (buildPhase === 'build') {
+      // Walk to next block position, then place it
+      const blocks = sortedBlocks(s);
+      if (buildBlockIndex < blocks.length) {
+        const b = blocks[buildBlockIndex];
+        const pos = blockToScreen(b.x, b.y, s);
+        // Target: stand at the block's position, at ground level
+        // (we use a fixed y for all blocks during build, but shift the
+        // target y upward as the structure grows so the player "climbs")
+        const targetX = pos.x + BLOCK / 2 - player.w / 2;
+        // As blocks get higher, the target y goes up so the player
+        // visually climbs the structure. We use a small portion of the
+        // block height so the player doesn't fly off-screen.
+        const climbAmount = Math.min(b.y * 4, 32);  // up to 32px of "climb"
+        const targetY = GROUND_Y - PLAYER_H - climbAmount;
+        moveToward(targetX, targetY);
+        // Once at the target, place the block
+        if (Math.abs(player.x - targetX) <= 3 && Math.abs(player.y - targetY) <= 3) {
+          buildPlacedBlocks.push({ ...b });
+          buildBlockIndex++;
+          buildT = 0;
+        }
+      } else {
+        // Done building — move to entry door
+        buildPhase = 'walk_to_entry';
+        buildT = 0;
+      }
+    } else if (buildPhase === 'walk_to_entry') {
+      // Walk to a position just to the LEFT of the entry door (outside
+      // the structure). The door is at x=-1 (block-units) on the left
+      // side, so we position the player just left of that.
+      const doorLeftX = buildOriginX + s.entryDoor.x * BLOCK;
+      const entryX = doorLeftX - player.w - 4;
+      const entryY = buildOriginY - (s.entryDoor.y + s.entryDoor.h) * BLOCK;
+      moveToward(entryX, entryY);
+      // Open the door (animate over 20 frames)
+      if (buildEntryDoorOpen < 1) buildEntryDoorOpen = Math.min(1, buildEntryDoorOpen + 0.05);
+      if (Math.abs(player.x - entryX) <= 3 && Math.abs(player.y - entryY) <= 3) {
+        buildPhase = 'walk_through';
+        buildT = 0;
+      }
+    } else if (buildPhase === 'walk_through') {
+      // Walk through the building, passing through the entry door,
+      // past the center, and to a position just LEFT of the exit door
+      const doorRightX = buildOriginX + s.exitDoor.x * BLOCK;
+      const exitX = doorRightX - player.w - 4;
+      const exitY = buildOriginY - (s.exitDoor.y + s.exitDoor.h) * BLOCK;
+      moveToward(exitX, exitY);
+      if (buildEntryDoorOpen < 1) buildEntryDoorOpen = 1;
+      if (Math.abs(player.x - exitX) <= 3 && Math.abs(player.y - exitY) <= 3) {
+        buildPhase = 'exit';
+        buildT = 0;
+      }
+    } else if (buildPhase === 'exit') {
+      // Open the exit door and walk past it (to the right of the structure)
+      const doorRightX = buildOriginX + s.exitDoor.x * BLOCK;
+      const exitX = doorRightX + 30;
+      const exitY = buildOriginY - (s.exitDoor.y + s.exitDoor.h) * BLOCK;
+      moveToward(exitX, exitY);
+      if (buildExitDoorOpen < 1) buildExitDoorOpen = Math.min(1, buildExitDoorOpen + 0.05);
+      if (Math.abs(player.x - exitX) <= 3 && Math.abs(player.y - exitY) <= 3) {
+        buildPhase = 'done';
+        buildT = 0;
+      }
+    } else if (buildPhase === 'done') {
+      // Build complete — clean up and let the game continue
+      buildingStructure = null;
+      // (builtStructures set already updated when the build started;
+      // nextBuildScore already advanced to the next 50-point milestone)
+      // Reset player position to the left side of the screen
+      player.x = 120;
+      player.y = GROUND_Y - PLAYER_H;
+      player.vy = 0;
+      // Clear the obstacles on screen so the player gets a clean start
+      // (structures don't persist in the world)
+      obstacles = [];
+      // Push the next obstacle spawn out so the player has a moment to react
+      nextSpawnX = W + 200;
+      spawnDelay = 60;
+    }
+  }
+
+  // Draw the structure being built (and the placed blocks so far).
+  function drawBuildStructure() {
+    const s = buildingStructure;
+    if (!s) return;
+    // Draw placed blocks (so they appear progressively)
+    for (const b of buildPlacedBlocks) {
+      const pos = blockToScreen(b.x, b.y, s);
+      // Add a slight pixel-art "block" look: face color + edge highlight
+      ctx.fillStyle = b.c;
+      ctx.fillRect(pos.x, pos.y, BLOCK, BLOCK);
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.fillRect(pos.x, pos.y + BLOCK - 2, BLOCK, 2);  // bottom shadow
+      ctx.fillRect(pos.x + BLOCK - 2, pos.y, 2, BLOCK);  // right shadow
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(pos.x, pos.y, BLOCK, 2);  // top highlight
+      ctx.fillRect(pos.x, pos.y, 2, BLOCK);  // left highlight
+    }
+    // Draw entry door (open or closed)
+    drawBuildDoor(s.entryDoor, buildEntryDoorOpen);
+    // Draw exit door (open or closed)
+    drawBuildDoor(s.exitDoor, buildExitDoorOpen);
+    // Structure name label
+    if (buildPlacedBlocks.length > 0) {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      const labelText = s.name;
+      ctx.font = "12px 'Press Start 2P', monospace";
+      const tw = ctx.measureText(labelText).width;
+      const labelX = buildOriginX + (s.width * BLOCK) / 2 - tw / 2 - 6;
+      const labelY = buildOriginY - s.height * BLOCK - 30;
+      ctx.fillRect(labelX, labelY, tw + 12, 22);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'left';
+      ctx.fillText(labelText, labelX + 6, labelY + 16);
+    }
+  }
+
+  function drawBuildDoor(door, openness) {
+    if (!door) return;
+    const s = buildingStructure;
+    // Door position (in block coords)
+    const x = buildOriginX + door.x * BLOCK;
+    const y = buildOriginY - door.y * BLOCK;
+    const w = door.w * BLOCK;
+    const h = door.h * BLOCK;
+    if (door.side === 'left') {
+      // Door swings inward (toward the right). When closed, it covers the
+      // opening. When open, it rotates away.
+      const pivotX = x + w;
+      const pivotY = y;
+      const angle = openness * Math.PI / 2;  // 0 to 90 degrees
+      ctx.save();
+      ctx.translate(pivotX, pivotY);
+      ctx.rotate(-angle);  // rotate the door outward
+      // Draw the door
+      ctx.fillStyle = '#6E4A1E';
+      ctx.fillRect(-w, -h, w, h);
+      // Door handle
+      ctx.fillStyle = '#D8B85A';
+      ctx.fillRect(-w * 0.3, -h * 0.5, 3, 3);
+      ctx.restore();
+    } else {
+      // Right-side door swings inward (toward the left)
+      const pivotX = x;
+      const pivotY = y;
+      const angle = openness * Math.PI / 2;
+      ctx.save();
+      ctx.translate(pivotX, pivotY);
+      ctx.rotate(angle);
+      ctx.fillStyle = '#6E4A1E';
+      ctx.fillRect(0, -h, w, h);
+      ctx.fillStyle = '#D8B85A';
+      ctx.fillRect(w * 0.7, -h * 0.5, 3, 3);
+      ctx.restore();
+    }
+  }
+
+  function triggerDeath() {
+    state = 'death';
+    deathT = 0;
+    particles = [];
+    // Always rebuild the death screen buttons when the player dies.
+    // Don't check for "any button" because the title buttons (Character
+    // Selector / Play) are still in the DOM (just hidden via CSS) and
+    // would prevent us from creating the death buttons. The buttons
+    // created here REPLACE the existing ones in the DOM via innerHTML=''.
+    showDeathButtons();
+    updateNukeButton();
+    updateSettingsButton();
+  }
+
+  function drawGameScene() {
+    drawSky();
+    drawClouds();
+    drawHills();
+    drawGround();
+    // Obstacles
+    for (const o of obstacles) {
+      if (o.type === 'oak') drawOakTree(o.x, o.y);
+      else if (o.type === 'birch') drawBirchTree(o.x, o.y);
+      else if (o.type === 'zombie') drawZombie(o.x, o.y);
+      else if (o.type === 'skeleton') {
+        // During UNO reverse, flip the skeleton to face away (showing its back)
+        if (o._unoFlipped) {
+          ctx.save();
+          ctx.translate(o.x + o.w / 2, o.y);
+          ctx.scale(-1, 1);
+          drawSkeleton(-o.w / 2, 0);
+          ctx.restore();
+          // Add a small "REVERSED!" speech-bubble above the skeleton
+          ctx.fillStyle = '#fff';
+          ctx.font = "10px 'Press Start 2P', monospace";
+          ctx.textAlign = 'center';
+          ctx.fillText('?!?!', o.x + o.w / 2, o.y - 8);
+        } else {
+          drawSkeleton(o.x, o.y);
+        }
+      }
+      else if (o.type === 'creeper') drawCreeper(o.x, o.y);
+    }
+    // Easter-egg effects: falling trees, dying mobs, explosions, wood drops
+    if (easterEgg) {
+      for (const ft of fallingTrees) {
+        ctx.save();
+        ctx.translate(ft.x + ft.w/2, GROUND_Y);
+        ctx.rotate(ft.rot);
+        if (ft.type === 'oak') drawOakTree(-ft.w/2, -ft.h);
+        else drawBirchTree(-ft.w/2, -ft.h);
+        ctx.restore();
+      }
+      for (const m of mobDeaths) {
+        ctx.save();
+        ctx.translate(m.x + m.w/2, m.y + m.h/2);
+        ctx.rotate(m.rot);
+        if (m.type === 'zombie') drawZombie(-m.w/2, -m.h/2);
+        else if (m.type === 'skeleton') drawSkeleton(-m.w/2, -m.h/2);
+        else if (m.type === 'creeper') drawCreeper(-m.w/2, -m.h/2);
+        ctx.restore();
+      }
+      for (const w of woodDrops) {
+        // Wood block: brown square with darker outline
+        fillRect(w.x, w.y, 8, 8, '#8B6F3F');
+        fillRect(w.x, w.y, 8, 2, '#6E4A2E');
+        fillRect(w.x, w.y, 2, 8, '#6E4A2E');
+      }
+    }  // end if (easterEgg)
+    for (const e of explosions) {
+        // Expanding explosion: outer red/orange ring + white center
+        const alpha = 1 - e.t / 30;
+        ctx.fillStyle = `rgba(255,200,0,${alpha * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255,100,0,${alpha * 0.7})`;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255,255,200,${alpha})`;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    drawPlayer();
+    // Structure being built (shown over the ground but the player is
+    // drawn on top so it looks like they're inside/around the structure)
+    if (buildingStructure) {
+      drawBuildStructure();
+    }
+    // Particles (drawn on top of everything except the HUD)
+    for (const p of particles) {
+      const alpha = 1 - p.age / p.life;
+      const size = p.size || 3;
+      const r = parseInt((p.col || '#FFFFFF').slice(1, 3), 16);
+      const g = parseInt((p.col || '#FFFFFF').slice(3, 5), 16);
+      const b = parseInt((p.col || '#FFFFFF').slice(5, 7), 16);
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+      ctx.fillRect(p.x, p.y, size, size);
+    }
+    // HUD
+    drawScore();
+    // UNO REVERSE overlay (only while the effect is active)
+    if (unoReverseActive) {
+      const t = unoReverseT;
+      // Bounce in for the first 20 frames
+      let scale = 1;
+      if (t < 20) {
+        const p = t / 20;
+        // Bounce: 1.5 → 1.0
+        scale = 1.5 - Math.sin(p * Math.PI) * 0.5;
+      }
+      // Fade in for first 10 frames, hold, fade out for last 30
+      let alpha = 1;
+      if (t < 10) alpha = t / 10;
+      else if (t > UNO_REVERSE_DURATION - 30) alpha = (UNO_REVERSE_DURATION - t) / 30;
+      alpha = Math.max(0, Math.min(1, alpha));
+      ctx.save();
+      ctx.translate(W / 2, 150);
+      ctx.scale(scale, scale);
+      // Black shadow
+      ctx.font = "32px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+      ctx.fillText('UNO REVERSE!', 4, 4);
+      // Red main text
+      ctx.fillStyle = `rgba(255,0,0,${alpha})`;
+      ctx.fillText('UNO REVERSE!', 0, 0);
+      // Yellow stroke
+      ctx.strokeStyle = `rgba(255,215,0,${alpha})`;
+      ctx.lineWidth = 2;
+      ctx.strokeText('UNO REVERSE!', 0, 0);
+      ctx.restore();
+    }
+    // Note: the nuke overlay (particles, screen flash, etc.) is drawn by
+    // render() AFTER drawGameScene() so it can persist when the state
+    // switches to 'title' (so particles keep falling on top of the title).
+  }
+
+  function drawNuke() {
+    // Phase 1: nuke is falling (first NUKE_FALL_DURATION frames)
+    if (nukeFalling) {
+      // Nuke starts above the screen and falls toward the ground
+      const startY = -40;
+      const endY = GROUND_Y - 80;
+      const t = nukeT / NUKE_FALL_DURATION;
+      const nukeY = startY + (endY - startY) * t;
+      // Trail (smoke behind the nuke)
+      ctx.fillStyle = 'rgba(80,80,80,0.4)';
+      for (let i = 1; i <= 5; i++) {
+        const trailY = nukeY - i * 8;
+        if (trailY > 0) {
+          ctx.fillRect(W/2 - 4, trailY, 8 + i, 4);
+        }
+      }
+      // Nuke body (a dark sphere with a radiation symbol)
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(W/2 - 16, nukeY, 32, 32);
+      ctx.fillStyle = '#333';
+      ctx.fillRect(W/2 - 14, nukeY + 2, 28, 4);  // highlight
+      // Radiation trefoil (yellow on dark)
+      ctx.fillStyle = '#FFE066';
+      ctx.fillRect(W/2 - 2, nukeY + 6, 4, 14);  // center stem
+      ctx.fillRect(W/2 - 8, nukeY + 10, 4, 10);  // left blade
+      ctx.fillRect(W/2 + 4, nukeY + 10, 4, 10);  // right blade
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(W/2 - 2, nukeY + 18, 4, 4);  // center dot
+      // Glow
+      ctx.fillStyle = `rgba(255,255,150,${0.3 + 0.3 * Math.sin(nukeT * 0.5)})`;
+      ctx.beginPath();
+      ctx.arc(W/2, nukeY + 16, 30, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    // Phase 2: explosion! Uses nukePostT (0 = boom frame, advances each frame after).
+    // The post-boom sequence is 1 sec orange + 6 sec particles = 7 sec total.
+    const postT = nukePostT;  // frames since the boom (0 on boom frame)
+    // White flash on the very first frame after detonation
+    if (postT === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillRect(0, 0, W, H);
+    }
+    // Orange screen: held at full intensity for 1 second (60 frames).
+    // No fade-out — when the orange phase ends, the title screen appears.
+    if (postT < 60) {
+      const tintAlpha = 0.6;
+      ctx.fillStyle = `rgba(255,100,0,${tintAlpha})`;
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      // Once orange ends, draw the title screen underneath so it shows
+      // through the falling particles. The title is fully revealed when
+      // all particles have fallen away.
+      drawTitle();
+    }
+    // Expanding shockwave ring (visible during the orange phase, ~60 frames)
+    if (postT < 60) {
+      const ringR = 30 + postT * 8;
+      const ringAlpha = Math.max(0, 1 - postT / 60);
+      if (ringAlpha > 0) {
+        ctx.strokeStyle = `rgba(255,255,200,${ringAlpha})`;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(W/2, GROUND_Y - 20, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+    }
+    // Nuke particles — each has its own fadeStart (0-320) and a 30-frame
+    // fade-out window. They fall through the floor under gravity and
+    // vanish one by one over the 6-sec fade phase (postT 60 → 420).
+    for (const p of nukeParticles) {
+      // Only show particles during the 6-second fall-and-fade phase (after orange)
+      const localFade = postT - 60;            // 0 at start of fade phase
+      if (localFade < p.fadeStart) continue;   // not yet visible
+      if (localFade > p.fadeStart + 30) continue;  // already faded out
+      const localAge = localFade - p.fadeStart;
+      const alpha = 1 - localAge / 30;
+      // Parse the hex color
+      const r = parseInt(p.col.slice(1, 3), 16);
+      const g = parseInt(p.col.slice(3, 5), 16);
+      const b = parseInt(p.col.slice(5, 7), 16);
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+    // "NUKE!" text during the orange phase (first 60 frames after boom)
+    if (postT < 60) {
+      const textAlpha = Math.max(0, 1 - postT / 60);
+      // Shake offset
+      const shake = postT < 10 ? (Math.random() - 0.5) * 8 : 0;
+      ctx.save();
+      ctx.translate(W/2 + shake, 200 + shake / 2);
+      ctx.font = "48px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      // Black shadow
+      ctx.fillStyle = `rgba(0,0,0,${textAlpha})`;
+      ctx.fillText('NUKE!', 4, 4);
+      // Red text
+      ctx.fillStyle = `rgba(255,50,0,${textAlpha})`;
+      ctx.fillText('NUKE!', 0, 0);
+      // Yellow stroke
+      ctx.strokeStyle = `rgba(255,215,0,${textAlpha})`;
+      ctx.lineWidth = 2;
+      ctx.strokeText('NUKE!', 0, 0);
+      ctx.restore();
+    }
+  }
+
+  function drawScore() {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(W - 200, 20, 180, 50);
+    fillRect(W - 198, 22, 176, 46, '#1a1a1a');
+    ctx.fillStyle = '#fff';
+    ctx.font = "20px 'Press Start 2P', monospace";
+    ctx.textAlign = 'right';
+    ctx.fillText('SCORE: ' + score, W - 30, 54);
+    // Easter-egg HUD indicator (top-left)
+    if (easterEgg) {
+      // Pulse alpha for visual interest
+      const pulse = 0.6 + 0.4 * Math.abs(Math.sin(performance.now() / 300));
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillRect(20, 20, 240, 50);
+      fillRect(22, 22, 236, 46, '#1a1a1a');
+      // Gold border to make it pop
+      ctx.fillStyle = `rgba(255,215,0,${pulse})`;
+      ctx.fillRect(22, 22, 236, 2);
+      ctx.fillRect(22, 22, 2, 46);
+      ctx.fillRect(256, 22, 2, 46);
+      ctx.fillRect(22, 66, 236, 2);
+      // Label
+      ctx.textAlign = 'left';
+      ctx.font = "10px 'Press Start 2P', monospace";
+      ctx.fillStyle = `rgba(255,215,0,${pulse})`;
+      ctx.fillText('EASTER EGG', 32, 40);
+      ctx.fillStyle = '#fff';
+      ctx.fillText('TOOL MASTER ON', 32, 60);
+      // Wood counter (only show if > 0)
+      if (woodCollected > 0) {
+        // Wood icon (small brown square) + count
+        fillRect(160, 30, 14, 14, '#8B6F3F');
+        fillRect(160, 30, 14, 3, '#6E4A2E');
+        fillRect(160, 30, 3, 14, '#6E4A2E');
+        ctx.font = "12px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#FFD700';
+        ctx.textAlign = 'left';
+        ctx.fillText('x' + woodCollected, 180, 42);
+      }
+    }
+  }
+
+  // -------- TITLE / DEATH OVERLAYS --------
+  function drawTitle() {
+    drawTitleScene();
+    // Overlay
+    ctx.fillStyle = COL.overlay;
+    ctx.fillRect(0, 0, W, H);
+    // Logo with shadow
+    ctx.textAlign = 'center';
+    ctx.font = "64px 'Press Start 2P', monospace";
+    ctx.fillStyle = '#000';
+    ctx.fillText('MINECRAFT', W/2, 130);
+    ctx.fillText('BOUNCE', W/2, 200);
+    ctx.fillStyle = '#3D8B2C';
+    ctx.fillText('MINECRAFT', W/2 + 4, 134);
+    ctx.fillText('BOUNCE', W/2 + 4, 204);
+    // Subtitle
+    ctx.font = "16px 'Press Start 2P', monospace";
+    ctx.fillStyle = '#222';
+    ctx.fillText('A DODGING ADVENTURE', W/2, 250);
+    // Show selected char mini next to PLAY
+    if (selectedChar) {
+      ctx.font = "12px 'Press Start 2P', monospace";
+      ctx.fillStyle = '#000';
+      ctx.fillText('SELECTED: ' + selectedChar.toUpperCase(), W/2, 320);
+    }
+    // Easter-egg indicator: a glowing gold sparkle next to the "M" if active
+    if (easterEgg) {
+      // Pulse the gold sparkles using sin() for visual interest
+      const pulse = 0.6 + 0.4 * Math.abs(Math.sin(performance.now() / 250));
+      // Measure the M's left edge so we can place the sparkle beside it
+      ctx.font = "64px 'Press Start 2P', monospace";
+      const logoWidth = ctx.measureText('MINECRAFT').width;
+      const logoLeft = (W - logoWidth) / 2;
+      // Draw a 4-point starburst sparkle (a 4-pointed star with pulses)
+      // Main diamond
+      ctx.fillStyle = `rgba(255,215,0,${pulse})`;
+      ctx.fillRect(logoLeft - 16, 76, 10, 10);
+      // Star points
+      ctx.fillStyle = `rgba(255,235,80,${pulse})`;
+      ctx.fillRect(logoLeft - 22, 80, 4, 2);   // left point
+      ctx.fillRect(logoLeft - 2, 80, 4, 2);    // right point
+      ctx.fillRect(logoLeft - 12, 70, 2, 4);   // top point
+      ctx.fillRect(logoLeft - 12, 90, 2, 4);   // bottom point
+      // Tiny twinkles
+      ctx.fillStyle = `rgba(255,255,150,${pulse * 0.8})`;
+      ctx.fillRect(logoLeft - 26, 78, 2, 2);
+      ctx.fillRect(logoLeft - 6, 92, 2, 2);
+      // Small text below the logo
+      ctx.font = "10px 'Press Start 2P', monospace";
+      ctx.fillStyle = `rgba(80,50,0,${pulse})`;
+      ctx.textAlign = 'center';
+      ctx.fillText('EASTER EGG ACTIVE', W/2, 280);
+      ctx.textAlign = 'center';
+    }
+  }
+  function drawSelector() {
+    drawTitleScene();
+    ctx.fillStyle = COL.overlay;
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.font = "40px 'Press Start 2P', monospace";
+    ctx.fillStyle = '#000';
+    ctx.fillText('CHOOSE YOUR', W/2, 90);
+    ctx.fillText('CHARACTER', W/2, 140);
+    // Two character cards
+    drawCharCard(220, 200, 'STEVE', 'steve', 'CLASSIC');
+    drawCharCard(540, 200, 'ALEX', 'alex', 'ADVENTURER');
+  }
+  function drawCharCard(x, y, name, charKey, tag) {
+    const w = 220, h = 320;
+    // Card bg
+    fillRect(x, y, w, h, '#1a1a1a');
+    fillRect(x + 4, y + 4, w - 8, h - 8, '#DCDCC0');
+    if (selectedChar === charKey) {
+      // Highlighted border
+      fillRect(x - 4, y - 4, w + 8, 6, COL.yellow);
+      fillRect(x - 4, y + h - 2, w + 8, 6, COL.yellow);
+      fillRect(x - 4, y - 4, 6, h + 8, COL.yellow);
+      fillRect(x + w - 2, y - 4, 6, h + 8, COL.yellow);
+    }
+    // Character preview area
+    const cx = x + w/2 - 32;
+    const cy = y + 50;
+    if (charKey === 'steve') drawSteve(cx, cy);
+    else drawAlex(cx, cy);
+    // Name
+    ctx.fillStyle = '#000';
+    ctx.font = "28px 'Press Start 2P', monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText(name, x + w/2, y + 200);
+    // Tag
+    ctx.font = "12px 'Press Start 2P', monospace";
+    ctx.fillStyle = '#444';
+    ctx.fillText(tag, x + w/2, y + 230);
+    // Selected indicator
+    if (selectedChar === charKey) {
+      ctx.fillStyle = COL.yellow;
+      ctx.font = "14px 'Press Start 2P', monospace";
+      ctx.fillText('SELECTED', x + w/2, y + h - 20);
+    } else {
+      ctx.fillStyle = '#1a1a1a';
+      ctx.font = "14px 'Press Start 2P', monospace";
+      ctx.fillText('CLICK TO PICK', x + w/2, y + h - 20);
+    }
+  }
+  function drawDeath() {
+    // Same scene, then darker overlay
+    drawGameScene(); // scene still visible
+    ctx.fillStyle = COL.deathOverlay;
+    ctx.fillRect(0, 0, W, H);
+    // Particles (use stored color/size if present, else white 3px)
+    for (const p of particles) {
+      const alpha = 1 - p.age / p.life;
+      const size = p.size || 3;
+      const r = parseInt((p.col || '#FFFFFF').slice(1, 3), 16);
+      const g = parseInt((p.col || '#FFFFFF').slice(3, 5), 16);
+      const b = parseInt((p.col || '#FFFFFF').slice(5, 7), 16);
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+      ctx.fillRect(p.x, p.y, size, size);
+    }
+    // Wait for animation to finish, then show death screen
+    if (deathT >= deathDuration) {
+      ctx.textAlign = 'center';
+      ctx.font = "72px 'Press Start 2P', monospace";
+      ctx.fillStyle = '#000';
+      ctx.fillText('YOU DIED!', W/2 + 4, 84);
+      ctx.fillStyle = COL.red;
+      ctx.fillText('YOU DIED!', W/2, 80);
+      ctx.font = "20px 'Press Start 2P', monospace";
+      ctx.fillStyle = '#fff';
+      ctx.fillText('SCORE: ' + score, W/2, 130);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.font = "16px 'Press Start 2P', monospace";
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillText('YOU DIED!', W/2, 30);
+    }
+  }
+
+  // -------- UI MANAGEMENT --------
+  const ui = document.getElementById('ui');
+  const btnChar = document.getElementById('btnChar');
+  const btnPlay = document.getElementById('btnPlay');
+
+  function showUI() { ui.classList.remove('hidden'); }
+  function hideUI() { ui.classList.add('hidden'); }
+
+  function updatePlayButton() {
+    if (selectedChar) {
+      btnPlay.classList.remove('disabled');
+      btnPlay.textContent = 'Play';
+    } else {
+      btnPlay.classList.add('disabled');
+      btnPlay.textContent = 'Select a character first';
+    }
+  }
+
+  btnChar.addEventListener('click', () => {
+    if (state === 'title') { state = 'select'; hideUI(); updateSettingsButton(); }
+  });
+  btnPlay.addEventListener('click', () => {
+    if (state === 'title' && selectedChar) {
+      resetGame();
+      state = 'game';
+      hideUI();
+      updateNukeButton();
+      updateSettingsButton();
+    }
+  });
+
+  // Settings menu exit button — closes the settings overlay and
+  // returns to the title screen. The settings menu is shown by
+  // clicking the gear button in the title-screen UI (see
+  // restoreTitleButtons).
+  const btnSettingsExit = document.getElementById('btnSettingsExit');
+  btnSettingsExit.addEventListener('click', () => {
+    hideSettings();
+  });
+
+  // Settings gear button (top-right corner of title screen) — opens
+  // the settings menu. We get the reference from the static HTML; the
+  // dynamic button created in restoreTitleButtons shares the same id,
+  // so we re-fetch the reference each time. The dynamic button's
+  // event listener handles clicks for new instances.
+  const getBtnSettings = () => document.getElementById('btnSettings');
+  getBtnSettings().addEventListener('click', () => {
+    if (state === 'title') showSettings();
+  });
+  // Make sure it's visible/hidden correctly on initial load (state is
+  // 'title' by default, so it should be visible)
+  updateSettingsButton();
+
+  // Click detection on character cards in selector screen,
+  // and easter-egg detection on the "M" in the "MINECRAFT" logo
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (W / rect.width);
+    const my = (e.clientY - rect.top) * (H / rect.height);
+    if (state === 'select') {
+      // Steve card at (220, 200, 220, 320)
+      if (mx >= 220 && mx <= 440 && my >= 200 && my <= 520) {
+        selectedChar = 'steve';
+        state = 'title';
+      } else if (mx >= 540 && mx <= 760 && my >= 200 && my <= 520) {
+        selectedChar = 'alex';
+        state = 'title';
+      }
+      updatePlayButton();
+    } else if (state === 'title') {
+      // Easter egg: click on the "M" in "MINECRAFT" logo.
+      // Logo is drawn at W/2, y=130 (text) and y=134 (shadow) with 64px font.
+      // Measure the text width to find the start of "MINECRAFT", then check
+      // if the click landed inside the "M" character.
+      // The hitbox is generous (60px wide, 80px tall) so the user doesn't
+      // have to be pixel-perfect.
+      ctx.font = "64px 'Press Start 2P', monospace";
+      const logoWidth = ctx.measureText('MINECRAFT').width;
+      const logoLeft = (W - logoWidth) / 2;
+      // The "M" is the leftmost character. Allow a forgiving hit area.
+      const mRight = logoLeft + 60;
+      const mTop = 60;
+      const mBottom = 150;
+      if (mx >= logoLeft && mx <= mRight && my >= mTop && my <= mBottom) {
+        easterEgg = !easterEgg;
+        updateNukeButton();
+      }
+    }
+  });
+
+  // Nuke button: only visible during gameplay when the easter egg is on
+  function updateNukeButton() {
+    const btnNuke = document.getElementById('btnNuke');
+    if (!btnNuke) return;
+    if (easterEgg && state === 'game' && !nukeActive) {
+      btnNuke.classList.remove('hidden');
+    } else {
+      btnNuke.classList.add('hidden');
+    }
+  }
+  document.getElementById('btnNuke').addEventListener('click', () => {
+    if (!easterEgg || state !== 'game' || nukeActive) return;
+    triggerNuke();
+  });
+
+  function triggerNuke() {
+    nukeActive = true;
+    nukeT = 0;
+    nukeFalling = true;
+    nukeParticles.length = 0;
+    // Hide the button while the nuke is playing
+    const btnNuke = document.getElementById('btnNuke');
+    if (btnNuke) btnNuke.classList.add('hidden');
+  }
+
+  // Death screen buttons
+  function showDeathButtons() {
+    hideUI();
+    ui.innerHTML = '';
+    const again = document.createElement('button');
+    again.className = 'btn';
+    again.setAttribute('data-death', 'again');
+    again.textContent = 'Play Again';
+    again.addEventListener('click', () => {
+      resetGame();
+      state = 'game';
+      hideUI();
+      updateNukeButton();
+      updateSettingsButton();
+    });
+    const menu = document.createElement('button');
+    menu.className = 'btn';
+    menu.setAttribute('data-death', 'menu');
+    menu.textContent = 'Main Menu';
+    menu.addEventListener('click', () => {
+      state = 'title';
+      hideUI();
+      showUI();
+      restoreTitleButtons();
+      updateNukeButton();
+      updateSettingsButton();
+    });
+    ui.appendChild(again);
+    ui.appendChild(menu);
+    showUI();
+  }
+  function restoreTitleButtons() {
+    ui.innerHTML = '';
+    const c = document.createElement('button');
+    c.className = 'btn'; c.textContent = 'Character Selector';
+    c.addEventListener('click', () => { if (state === 'title') { state = 'select'; hideUI(); updateSettingsButton(); } });
+    const p = document.createElement('button');
+    p.className = 'btn'; p.id = 'btnPlay'; p.textContent = 'Play';
+    if (!selectedChar) p.classList.add('disabled');
+    p.addEventListener('click', () => {
+      if (state === 'title' && selectedChar) {
+        resetGame(); state = 'game'; hideUI();
+        updateNukeButton();
+        updateSettingsButton();
+      }
+    });
+    // Settings button (gear icon) — uses the same blue background and
+    // same Press Start 2P font as the other title buttons (via .btnGear
+    // CSS, which mirrors the .btn styling). Clicking it opens the
+    // settings menu overlay.
+    const s = document.createElement('button');
+    s.className = 'btnGear';
+    s.id = 'btnSettings';
+    s.textContent = '⚙ Settings';
+    s.addEventListener('click', () => {
+      if (state === 'title') showSettings();
+    });
+    ui.appendChild(c);
+    ui.appendChild(p);
+    ui.appendChild(s);
+    // Show or hide the gear button based on the current state
+    updateSettingsButton();
+  }
+
+  // Show the settings menu overlay (semi-transparent panel with the
+  // "SETTINGS" title, an empty body, and an Exit button). The settings
+  // themselves will be added later — for now the body just says
+  // "No settings yet".
+  function showSettings() {
+    document.getElementById('settingsMenu').classList.remove('hidden');
+  }
+
+  // Close the settings menu and return to the title screen.
+  function hideSettings() {
+    document.getElementById('settingsMenu').classList.add('hidden');
+  }
+
+  // Show or hide the settings gear button based on the current state.
+  // The button only shows on the title screen — it's hidden during
+  // character select, gameplay, and the death screen.
+  function updateSettingsButton() {
+    const btn = document.getElementById('btnSettings');
+    if (!btn) return;
+    if (state === 'title') {
+      btn.classList.remove('hidden');
+    } else {
+      btn.classList.add('hidden');
+    }
+  }
+
+  function maybeShowDeathButtons() {
+    // Replace whatever buttons are in the UI with the death buttons, but
+    // only if the death buttons aren't already there. The check is for
+    // the SPECIFIC "Play Again" button (which only the death screen has).
+    // We can't just check "any button" because the title buttons stay in
+    // the DOM throughout (just hidden via CSS) and would always match.
+    if (state === 'death' && !ui.querySelector('button[data-death]')) {
+      showDeathButtons();
+    }
+  }
+
+  // -------- INPUT --------
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+      if (!e.repeat) {
+        spacePressed = true;
+        spaceWasPressed = false;
+        if (state === 'game') {
+          if (onGround) {
+            player.vy = JUMP_V;
+            onGround = false;
+          } else if (!doubleJumped) {
+            player.vy = DBL_JUMP_V;
+            doubleJumped = true;
+          }
+        }
+      }
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+      spacePressed = false;
+      spaceWasPressed = true;
+      e.preventDefault();
+    }
+  });
+
+  // -------- RENDER LOOP --------
+  function render() {
+    // Clear
+    ctx.fillStyle = '#4A90E2';
+    ctx.fillRect(0, 0, W, H);
+    if (state === 'title') {
+      drawTitle();
+      showUI();
+      updatePlayButton();
+    } else if (state === 'select') {
+      drawSelector();
+    } else if (state === 'game') {
+      drawGameScene();
+    } else if (state === 'death') {
+      drawDeath();
+      maybeShowDeathButtons();
+    }
+    // Nuke overlay: drawn on top of whatever state is current so the
+    // particles can keep falling even after state switches to 'title'
+    // (the title is already drawn underneath by drawNuke itself).
+    if (nukeActive) {
+      drawNuke();
+    }
+  }
+
+  function tick(time) {
+    const dt = time - lastTime;
+    lastTime = time;
+    update(dt);
+    render();
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
